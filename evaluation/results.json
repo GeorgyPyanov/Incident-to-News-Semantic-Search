@@ -1,0 +1,330 @@
+{
+  "results": [
+    {
+      "approach_name": "keyword_lexical",
+      "average_execution_time_ms": 0.0624667542676131,
+      "configuration": {
+        "min_score": 0.0,
+        "scoring": "token_overlap_jaccard"
+      },
+      "evaluation_timestamp": "2026-07-11T18:30:00.714547+00:00",
+      "metrics": {
+        "map": 1.0,
+        "mrr": 1.0,
+        "ndcg@1": 1.0,
+        "ndcg@3": 1.0,
+        "ndcg@5": 1.0,
+        "precision@1": 1.0,
+        "precision@3": 0.4444444444444444,
+        "precision@5": 0.26666666666666666,
+        "recall@1": 0.8333333333333334,
+        "recall@3": 1.0,
+        "recall@5": 1.0
+      },
+      "num_queries": 3,
+      "per_query_results": [
+        {
+          "execution_time_ms": 0.08170027285814285,
+          "query_id": "q1",
+          "ranked_article_ids": [
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "relevant_article_ids": [
+            "n1"
+          ],
+          "scores": {
+            "n1": 0.47368421052631576,
+            "n2": 0.043478260869565216,
+            "n3": 0.0
+          }
+        },
+        {
+          "execution_time_ms": 0.05060015246272087,
+          "query_id": "q2",
+          "ranked_article_ids": [
+            "n4",
+            "n6",
+            "n5"
+          ],
+          "relevant_article_ids": [
+            "n4"
+          ],
+          "scores": {
+            "n4": 0.4666666666666667,
+            "n5": 0.0,
+            "n6": 0.08333333333333333
+          }
+        },
+        {
+          "execution_time_ms": 0.055099837481975555,
+          "query_id": "q3",
+          "ranked_article_ids": [
+            "n7",
+            "n8",
+            "n9"
+          ],
+          "relevant_article_ids": [
+            "n7",
+            "n8"
+          ],
+          "scores": {
+            "n7": 0.42857142857142855,
+            "n8": 0.19047619047619047,
+            "n9": 0.04
+          }
+        }
+      ],
+      "selected_k_values": [
+        1,
+        3,
+        5
+      ]
+    },
+    {
+      "approach_name": "semantic_embedding",
+      "average_execution_time_ms": 0.37249984840552014,
+      "configuration": {
+        "dimensions": 32,
+        "embedding": "deterministic_hashing_token_average",
+        "min_score": -1.0
+      },
+      "evaluation_timestamp": "2026-07-11T18:30:00.714547+00:00",
+      "metrics": {
+        "map": 1.0,
+        "mrr": 1.0,
+        "ndcg@1": 1.0,
+        "ndcg@3": 1.0,
+        "ndcg@5": 1.0,
+        "precision@1": 1.0,
+        "precision@3": 0.4444444444444444,
+        "precision@5": 0.26666666666666666,
+        "recall@1": 0.8333333333333334,
+        "recall@3": 1.0,
+        "recall@5": 1.0
+      },
+      "num_queries": 3,
+      "per_query_results": [
+        {
+          "execution_time_ms": 0.4109996370971203,
+          "query_id": "q1",
+          "ranked_article_ids": [
+            "n1",
+            "n3",
+            "n2"
+          ],
+          "relevant_article_ids": [
+            "n1"
+          ],
+          "scores": {
+            "n1": 0.8437439717044292,
+            "n2": -0.1546046816737167,
+            "n3": 0.049280058223317935
+          }
+        },
+        {
+          "execution_time_ms": 0.3223000094294548,
+          "query_id": "q2",
+          "ranked_article_ids": [
+            "n4",
+            "n6",
+            "n5"
+          ],
+          "relevant_article_ids": [
+            "n4"
+          ],
+          "scores": {
+            "n4": 0.7733828522654788,
+            "n5": 0.16439357662375814,
+            "n6": 0.29127064926673246
+          }
+        },
+        {
+          "execution_time_ms": 0.3841998986899853,
+          "query_id": "q3",
+          "ranked_article_ids": [
+            "n7",
+            "n8",
+            "n9"
+          ],
+          "relevant_article_ids": [
+            "n7",
+            "n8"
+          ],
+          "scores": {
+            "n7": 0.5170533984153569,
+            "n8": 0.27479793345645326,
+            "n9": -0.023730591170890696
+          }
+        }
+      ],
+      "selected_k_values": [
+        1,
+        3,
+        5
+      ]
+    },
+    {
+      "approach_name": "hybrid",
+      "average_execution_time_ms": 0.3997332726915677,
+      "configuration": {
+        "lexical_weight": 0.55,
+        "min_score": -1.0,
+        "semantic_dimensions": 32,
+        "semantic_weight": 0.45
+      },
+      "evaluation_timestamp": "2026-07-11T18:30:00.714547+00:00",
+      "metrics": {
+        "map": 1.0,
+        "mrr": 1.0,
+        "ndcg@1": 1.0,
+        "ndcg@3": 1.0,
+        "ndcg@5": 1.0,
+        "precision@1": 1.0,
+        "precision@3": 0.4444444444444444,
+        "precision@5": 0.26666666666666666,
+        "recall@1": 0.8333333333333334,
+        "recall@3": 1.0,
+        "recall@5": 1.0
+      },
+      "num_queries": 3,
+      "per_query_results": [
+        {
+          "execution_time_ms": 0.40820008143782616,
+          "query_id": "q1",
+          "ranked_article_ids": [
+            "n1",
+            "n3",
+            "n2"
+          ],
+          "relevant_article_ids": [
+            "n1"
+          ],
+          "scores": {
+            "n1": 0.6402111030564668,
+            "n2": -0.045659063274911635,
+            "n3": 0.02217602620049307
+          }
+        },
+        {
+          "execution_time_ms": 0.36239996552467346,
+          "query_id": "q2",
+          "ranked_article_ids": [
+            "n4",
+            "n6",
+            "n5"
+          ],
+          "relevant_article_ids": [
+            "n4"
+          ],
+          "scores": {
+            "n4": 0.6046889501861321,
+            "n5": 0.07397710948069117,
+            "n6": 0.17690512550336296
+          }
+        },
+        {
+          "execution_time_ms": 0.4285997711122036,
+          "query_id": "q3",
+          "ranked_article_ids": [
+            "n7",
+            "n8",
+            "n9"
+          ],
+          "relevant_article_ids": [
+            "n7",
+            "n8"
+          ],
+          "scores": {
+            "n7": 0.4683883150011963,
+            "n8": 0.22842097481730872,
+            "n9": 0.011321233973099188
+          }
+        }
+      ],
+      "selected_k_values": [
+        1,
+        3,
+        5
+      ]
+    },
+    {
+      "approach_name": "current_default",
+      "average_execution_time_ms": 0.05030011137326559,
+      "configuration": {
+        "implementation": "retrieval.service.InMemoryNewsRetriever"
+      },
+      "evaluation_timestamp": "2026-07-11T18:30:00.714547+00:00",
+      "metrics": {
+        "map": 1.0,
+        "mrr": 1.0,
+        "ndcg@1": 1.0,
+        "ndcg@3": 1.0,
+        "ndcg@5": 1.0,
+        "precision@1": 1.0,
+        "precision@3": 0.4444444444444444,
+        "precision@5": 0.26666666666666666,
+        "recall@1": 0.8333333333333334,
+        "recall@3": 1.0,
+        "recall@5": 1.0
+      },
+      "num_queries": 3,
+      "per_query_results": [
+        {
+          "execution_time_ms": 0.05759997293353081,
+          "query_id": "q1",
+          "ranked_article_ids": [
+            "n1",
+            "n2"
+          ],
+          "relevant_article_ids": [
+            "n1"
+          ],
+          "scores": {
+            "n1": 0.8181818181818182,
+            "n2": 0.09090909090909091
+          }
+        },
+        {
+          "execution_time_ms": 0.04329998046159744,
+          "query_id": "q2",
+          "ranked_article_ids": [
+            "n4",
+            "n6"
+          ],
+          "relevant_article_ids": [
+            "n4"
+          ],
+          "scores": {
+            "n4": 0.7,
+            "n6": 0.2
+          }
+        },
+        {
+          "execution_time_ms": 0.0500003807246685,
+          "query_id": "q3",
+          "ranked_article_ids": [
+            "n7",
+            "n8",
+            "n9"
+          ],
+          "relevant_article_ids": [
+            "n7",
+            "n8"
+          ],
+          "scores": {
+            "n7": 0.8181818181818182,
+            "n8": 0.36363636363636365,
+            "n9": 0.09090909090909091
+          }
+        }
+      ],
+      "selected_k_values": [
+        1,
+        3,
+        5
+      ]
+    }
+  ]
+}

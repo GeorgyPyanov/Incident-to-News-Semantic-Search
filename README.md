@@ -1,28 +1,33 @@
 # Incident-to-News-Semantic-Search
 
-A starter project for connecting incident data with semantically relevant news articles.
+A starter incident-to-news search pipeline that connects incident logs with semantically
+relevant news articles and adds a concise explanation for each retrieved result.
 
-This repository currently contains only the initial project structure. Application logic,
-dependencies, and runtime entry points will be added later.
+## Data Flow
+
+1. `event_extraction` turns an original log into typed `IncidentData`.
+2. `retrieval` ranks candidate `NewsArticle` records.
+3. `retrieval.reasoning.NewsReasoningService` compares the incident data with each article.
+4. `api.pipeline.IncidentNewsSearchPipeline` returns the existing news result fields plus a `reasoning` field.
+
+When the reasoner cannot find concrete shared evidence, it returns:
+
+```text
+No strong connection could be identified.
+```
 
 ## Folder Structure
 
 ```text
 .
-├── api/
-│   └── __init__.py
-├── data/
-├── database/
-├── docs/
-├── event_extraction/
-│   └── __init__.py
-├── reasoning/
-│   └── __init__.py
-├── retrieval/
-│   └── __init__.py
-├── .env.example
-├── .gitignore
-└── README.md
++-- api/
++-- data/
++-- database/
++-- docs/
++-- evaluation/
++-- event_extraction/
++-- retrieval/
+`-- tests/
 ```
 
 ## Setup
@@ -60,13 +65,54 @@ python -m venv .venv
 
 ## Install Dependencies
 
-No dependencies are defined yet. Once a dependency file is added, install dependencies with:
+No external dependencies are required for the current unit-tested pipeline.
+
+## Run Tests
 
 ```bash
-pip install -r requirements.txt
+python -m unittest discover
 ```
 
-## Run the Project
+## Evaluation Dataset
 
-No application entry point has been implemented yet. Once the API or CLI is added, this
-section should be updated with the appropriate run command.
+The default labeled dataset is stored at:
+
+```text
+evaluation/data/evaluation_dataset.json
+```
+
+Each query contains an `incident_log`, a list of `candidate_articles`, and
+`relevant_article_ids`. To prepare a new dataset, keep the same JSON structure and use
+deterministic, non-production examples so local and CI runs are reproducible.
+
+## Run Retrieval Evaluation
+
+Run all configured retrieval approaches with:
+
+```bash
+python -m evaluation.runner
+```
+
+The evaluation compares:
+
+- `keyword_lexical`: token-overlap lexical retrieval.
+- `semantic_embedding`: deterministic hash-based token embeddings with cosine similarity.
+- `hybrid`: combined lexical and semantic score.
+- `current_default`: the existing `InMemoryNewsRetriever` used by the project pipeline.
+
+Results are saved to:
+
+```text
+evaluation/results.json
+evaluation/results.csv
+```
+
+The command also prints a comparison table in the console.
+
+## Evaluation Metrics
+
+- `Precision@k`: the fraction of the top `k` retrieved articles that are relevant.
+- `Recall@k`: the fraction of all relevant articles found in the top `k`.
+- `MRR`: mean reciprocal rank of the first relevant article.
+- `MAP`: mean average precision across all evaluated queries.
+- `nDCG@k`: ranking quality at `k`, giving more credit when relevant articles appear higher.

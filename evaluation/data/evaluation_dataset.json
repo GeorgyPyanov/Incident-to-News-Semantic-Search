@@ -1,0 +1,97 @@
+{
+  "queries": [
+    {
+      "id": "q1",
+      "incident_log": "2026-07-10 CloudPay payments-api timeout in us-east-1 caused 503 errors for checkout requests.",
+      "relevant_article_ids": ["n1"],
+      "candidate_articles": [
+        {
+          "id": "n1",
+          "title": "CloudPay outage hits payments-api in us-east-1",
+          "url": "https://example.test/news/cloudpay-outage",
+          "source": "Example News",
+          "published_at": "2026-07-10",
+          "content": "CloudPay confirmed timeout and 503 errors affecting checkout requests through payments-api in us-east-1."
+        },
+        {
+          "id": "n2",
+          "title": "Retail sales rise in July",
+          "url": "https://example.test/news/retail-sales",
+          "source": "Example News",
+          "published_at": "2026-07-10",
+          "content": "Analysts reported stronger retail sales across several regions."
+        },
+        {
+          "id": "n3",
+          "title": "Database maintenance completed in eu-west-1",
+          "url": "https://example.test/news/database-maintenance",
+          "source": "Example News",
+          "published_at": "2026-07-09",
+          "content": "A database maintenance window completed without user-facing impact."
+        }
+      ]
+    },
+    {
+      "id": "q2",
+      "incident_log": "Login service authentication failures increased for AcmeID customers in Frankfurt on 2026-07-09.",
+      "relevant_article_ids": ["n4"],
+      "candidate_articles": [
+        {
+          "id": "n4",
+          "title": "AcmeID authentication failures reported in Frankfurt",
+          "url": "https://example.test/news/acmeid-frankfurt-auth",
+          "source": "Example News",
+          "published_at": "2026-07-09",
+          "content": "AcmeID customers saw elevated login authentication failures in Frankfurt."
+        },
+        {
+          "id": "n5",
+          "title": "CloudPay opens a new engineering office",
+          "url": "https://example.test/news/cloudpay-office",
+          "source": "Example News",
+          "published_at": "2026-07-08",
+          "content": "CloudPay announced an engineering office expansion."
+        },
+        {
+          "id": "n6",
+          "title": "Sports streaming platform adds new authentication features",
+          "url": "https://example.test/news/streaming-auth",
+          "source": "Example News",
+          "published_at": "2026-07-09",
+          "content": "A streaming company released optional account security controls."
+        }
+      ]
+    },
+    {
+      "id": "q3",
+      "incident_log": "Inventory sync jobs failed after DNS resolution errors for warehouse-api in Chicago.",
+      "relevant_article_ids": ["n7", "n8"],
+      "candidate_articles": [
+        {
+          "id": "n7",
+          "title": "Warehouse API DNS errors disrupt inventory sync",
+          "url": "https://example.test/news/warehouse-dns",
+          "source": "Example News",
+          "published_at": "2026-07-07",
+          "content": "DNS resolution errors caused warehouse-api inventory sync jobs to fail for several Chicago operators."
+        },
+        {
+          "id": "n8",
+          "title": "Chicago logistics providers report inventory delays",
+          "url": "https://example.test/news/chicago-inventory-delays",
+          "source": "Example News",
+          "published_at": "2026-07-07",
+          "content": "Logistics providers in Chicago described inventory sync delays tied to DNS failures."
+        },
+        {
+          "id": "n9",
+          "title": "Payments processor completes card network migration",
+          "url": "https://example.test/news/card-network",
+          "source": "Example News",
+          "published_at": "2026-07-06",
+          "content": "A payments processor migrated card network traffic with no DNS or warehouse impact."
+        }
+      ]
+    }
+  ]
+}
