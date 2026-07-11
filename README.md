@@ -116,3 +116,31 @@ The command also prints a comparison table in the console.
 - `MRR`: mean reciprocal rank of the first relevant article.
 - `MAP`: mean average precision across all evaluated queries.
 - `nDCG@k`: ranking quality at `k`, giving more credit when relevant articles appear higher.
+
+## Dense, Sparse, and Hybrid Retrieval
+
+The branch now also includes a PostgreSQL-backed retrieval path for incident-to-news matching.
+This is separate from the in-memory pipeline above and is meant for the later tasks around
+embeddings, pgvector search, BM25 baseline search, and hybrid ranking.
+
+What is included:
+
+- incident text normalization for embeddings and lexical search
+- OpenAI embedding generation for incident logs
+- PostgreSQL schema with `vector(1536)` columns
+- HNSW indexes for dense search
+- GIN + `tsvector` support for BM25-style full-text search
+- reciprocal rank fusion for hybrid search
+- a CLI for schema setup, embedding generation, search, and benchmarking
+
+Typical commands:
+
+```bash
+python -m retrieval.cli init-db
+python -m retrieval.cli embed-incident --original-log "API timeout after deploy"
+python -m retrieval.cli fulltext-search --query-text "API timeout deploy"
+python -m retrieval.cli benchmark-dense --query-embedding "[0.1, 0.2, 0.3]" --limit 10
+```
+
+The benchmark command prints latency for the indexed path and for the path with index usage
+disabled, plus `EXPLAIN ANALYZE` output so you can verify whether HNSW is really chosen.
