@@ -1,0 +1,143 @@
+{
+  "examples": 150,
+  "top_k": 10,
+  "modes": {
+    "bm25": {
+      "hit_at_k": 0.66,
+      "hits": 99,
+      "per_dataset": {
+        "statuspage_incidents": {
+          "examples": 50,
+          "hits": 46,
+          "hit_at_k": 0.92
+        },
+        "osv_advisories": {
+          "examples": 50,
+          "hits": 50,
+          "hit_at_k": 1.0
+        },
+        "gharchive_open_source": {
+          "examples": 50,
+          "hits": 3,
+          "hit_at_k": 0.06
+        }
+      },
+      "sample_misses": [
+        {
+          "example_id": "statuspage_incidents:f69b3770-5fe4-4eaf-bb0d-5366a21efab3:7f59cd0f-94ae-49ba-aad4-df6e58ff9017",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "7f59cd0f-94ae-49ba-aad4-df6e58ff9017"
+          ]
+        },
+        {
+          "example_id": "statuspage_incidents:75eef99e-3853-40b9-a00a-93b16c982c01:ce2292f4-7500-4268-a36c-b128eb0c9c52",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "ce2292f4-7500-4268-a36c-b128eb0c9c52"
+          ]
+        },
+        {
+          "example_id": "statuspage_incidents:8247b776-3e88-4e95-adc3-2ad561067393:ce2292f4-7500-4268-a36c-b128eb0c9c52",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "ce2292f4-7500-4268-a36c-b128eb0c9c52"
+          ]
+        },
+        {
+          "example_id": "statuspage_incidents:8a272e49-b2c3-4a93-8f02-04cef31f814b:a344161f-ca25-4133-837b-65076dac3bfe",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "a344161f-ca25-4133-837b-65076dac3bfe"
+          ]
+        },
+        {
+          "example_id": "gharchive_open_source:e1198924-7046-43c8-a97b-b44359f72af5:1e4e76ad-60e8-41d3-84df-56973e002e54",
+          "dataset": "gharchive_open_source",
+          "relevant_news_ids": [
+            "1e4e76ad-60e8-41d3-84df-56973e002e54"
+          ]
+        },
+        {
+          "example_id": "gharchive_open_source:b323ef88-25c4-49a3-8b85-993bb7434b66:9321d768-4225-4ab2-8d28-c32da4955f7d",
+          "dataset": "gharchive_open_source",
+          "relevant_news_ids": [
+            "9321d768-4225-4ab2-8d28-c32da4955f7d"
+          ]
+        },
+        {
+          "example_id": "gharchive_open_source:809eb9d7-e72c-4eba-be8e-c18624ce1461:289817b7-ad4c-47bc-8af7-77a21c577d69",
+          "dataset": "gharchive_open_source",
+          "relevant_news_ids": [
+            "289817b7-ad4c-47bc-8af7-77a21c577d69"
+          ]
+        },
+        {
+          "example_id": "gharchive_open_source:e17fbf49-08a0-43bd-b26b-73033dafbc84:bb4e3602-57b7-469f-8764-123aadb57229",
+          "dataset": "gharchive_open_source",
+          "relevant_news_ids": [
+            "bb4e3602-57b7-469f-8764-123aadb57229"
+          ]
+        },
+        {
+          "example_id": "gharchive_open_source:69f43e27-75fc-496e-be1e-64d6e71015a4:b5812233-6fb3-403d-8ba3-e07cb85d8e5f",
+          "dataset": "gharchive_open_source",
+          "relevant_news_ids": [
+            "b5812233-6fb3-403d-8ba3-e07cb85d8e5f"
+          ]
+        },
+        {
+          "example_id": "gharchive_open_source:cd0e9c74-b594-4c54-8d87-649d0863d684:fb687aaa-aeeb-4904-a064-f905b89390b3",
+          "dataset": "gharchive_open_source",
+          "relevant_news_ids": [
+            "fb687aaa-aeeb-4904-a064-f905b89390b3"
+          ]
+        }
+      ]
+    },
+    "dense": {
+      "hit_at_k": 1.0,
+      "hits": 150,
+      "per_dataset": {
+        "statuspage_incidents": {
+          "examples": 50,
+          "hits": 50,
+          "hit_at_k": 1.0
+        },
+        "osv_advisories": {
+          "examples": 50,
+          "hits": 50,
+          "hit_at_k": 1.0
+        },
+        "gharchive_open_source": {
+          "examples": 50,
+          "hits": 50,
+          "hit_at_k": 1.0
+        }
+      },
+      "sample_misses": []
+    },
+    "hybrid": {
+      "hit_at_k": 1.0,
+      "hits": 150,
+      "per_dataset": {
+        "statuspage_incidents": {
+          "examples": 50,
+          "hits": 50,
+          "hit_at_k": 1.0
+        },
+        "osv_advisories": {
+          "examples": 50,
+          "hits": 50,
+          "hit_at_k": 1.0
+        },
+        "gharchive_open_source": {
+          "examples": 50,
+          "hits": 50,
+          "hit_at_k": 1.0
+        }
+      },
+      "sample_misses": []
+    }
+  }
+}

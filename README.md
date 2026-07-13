@@ -73,7 +73,8 @@ Current included Docker dump:
 - `raw_news`: 344 449 rows
 - `raw_logs`: 9 210 rows
 - `news_sources`: 42 rows
-- total selected objects: 353 701 rows
+- `structured_events`: 100 rows
+- total selected objects: 353 801 rows
 
 Relevance checks:
 
@@ -150,6 +151,79 @@ py -m database.check
 ```powershell
 $env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
 py -m database.relevance_check
+```
+
+The expensive GDELT provider/time diagnostic is optional:
+
+```powershell
+py -m database.relevance_check --include-gdelt
+```
+
+## Extract Structured Events
+
+Convert raw news records into rule-based `structured_events` rows:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m data.extract_structured_events --limit 1000
+```
+
+## Validation Set
+
+The validation set is stored at:
+
+```text
+evaluation/data/validation_set.json
+```
+
+It contains 150 labeled log-news examples:
+
+- 50 Statuspage update logs linked to incident reports by `incident_id`
+- 50 OSV package logs linked to advisories by `advisory_id`
+- 50 GH Archive activity logs linked to GitHub releases by repository and time window
+
+Regenerate it from the loaded database with:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m evaluation.build_validation_set --limit-per-source 50
+```
+
+Run retrieval validation:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m evaluation.validate_retrieval --top-k 10
+```
+
+Current validation result on the included dump:
+
+- `bm25`: hit@10 = 0.66
+- `dense`: hit@10 = 1.00
+- `hybrid`: hit@10 = 1.00
+
+## FastAPI Demo
+
+Run the API:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m uvicorn api.app:app --reload
+```
+
+Search endpoints:
+
+- `POST /search/bm25`
+- `POST /search/dense`
+- `POST /search/hybrid`
+
+Example request:
+
+```json
+{
+  "log": "Twilio SMS delivery failures from Twilio Phone Numbers to Spusu Italy investigating",
+  "top_k": 5
+}
 ```
 
 ## Long Real-Source Harvest

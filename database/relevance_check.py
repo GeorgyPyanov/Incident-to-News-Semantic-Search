@@ -1,3 +1,5 @@
+import argparse
+
 import psycopg
 
 from database.migrate import _postgres_url
@@ -26,6 +28,10 @@ QUERIES = {
         FROM raw_news
         WHERE source_type = 'statuspage_incident'
     """,
+}
+
+
+OPTIONAL_QUERIES = {
     "gdelt_provider_time_candidates": """
         WITH candidates AS (
             SELECT rl.id, count(rn.id) AS candidate_count
@@ -45,7 +51,11 @@ QUERIES = {
         )
         SELECT count(*), coalesce(sum(candidate_count), 0)
         FROM candidates
-    """,
+    """
+}
+
+
+QUERIES.update({
     "hackernews_provider_time_candidates": """
         WITH candidates AS (
             SELECT rl.id, count(rn.id) AS candidate_count
@@ -102,13 +112,24 @@ QUERIES = {
                 AND rn.raw_payload->>'advisory_id' = ol.raw_payload->>'advisory_id'
           )
     """,
-}
+})
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Check relevance coverage for loaded raw logs/news.")
+    parser.add_argument("--include-gdelt", action="store_true", help="Run the expensive GDELT provider/time join.")
+    return parser.parse_args()
 
 
 def main() -> None:
+    args = parse_args()
+    queries = dict(QUERIES)
+    if args.include_gdelt:
+        queries.update(OPTIONAL_QUERIES)
+
     with psycopg.connect(_postgres_url(settings.database_url)) as conn:
         with conn.cursor() as cur:
-            for name, query in QUERIES.items():
+            for name, query in queries.items():
                 cur.execute(query)
                 print(f"{name}: {cur.fetchone()}")
 
