@@ -11,9 +11,10 @@ from psycopg.rows import dict_row
 
 from database.migrate import _postgres_url
 from database.settings import settings
+from retrieval.query_rewrite import rewrite_incident_query
 
 
-SearchMode = Literal["bm25", "dense", "hybrid"]
+SearchMode = Literal["bm25", "dense", "hybrid", "pgvector"]
 TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_-]{2,}", re.IGNORECASE)
 IDENTIFIER_RE = re.compile(r"\b(?:GHSA|CVE|RUSTSEC|PYSEC|GO)-[A-Za-z0-9_.-]+\b", re.IGNORECASE)
 
@@ -153,6 +154,24 @@ LIMIT %(limit)s
 """
 
 
+PGVECTOR_SQL = """
+SELECT
+    rn.id::text AS id,
+    se.title,
+    rn.url,
+    rn.source,
+    rn.source_type,
+    rn.published_at,
+    left(coalesce(se.summary, rn.body, rn.title), 240) AS snippet,
+    1 - (se.embedding <=> %(embedding)s::vector) AS score
+FROM structured_events se
+JOIN raw_news rn ON rn.id = se.raw_news_id
+WHERE se.embedding IS NOT NULL
+ORDER BY se.embedding <=> %(embedding)s::vector
+LIMIT %(limit)s
+"""
+
+
 class DbNewsSearchService:
     def search(self, query: str, mode: SearchMode, top_k: int = 10) -> list[DbNewsHit]:
         top_k = max(1, min(top_k, 50))
@@ -160,6 +179,8 @@ class DbNewsSearchService:
             return self.search_bm25(query, top_k)
         if mode == "dense":
             return self.search_dense(query, top_k)
+        if mode == "pgvector":
+            return self.search_pgvector(query, top_k)
         return self.search_hybrid(query, top_k)
 
     def search_bm25(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
@@ -176,7 +197,7 @@ class DbNewsSearchService:
 
     def search_dense(self, query: str, top_k: int = 10, pool_size: int = 200) -> list[DbNewsHit]:
         candidates = self._candidate_rows(query, pool_size)
-        query_vec = _hashed_embedding(query)
+        query_vec = _hashed_embedding(rewrite_incident_query(query))
         scored = []
         for row in candidates:
             text = " ".join(
@@ -190,12 +211,21 @@ class DbNewsSearchService:
             for rank, (score, row) in enumerate(scored[:top_k], start=1)
         ]
 
+    def search_pgvector(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
+        embedding = _vector_literal(_hashed_dense_vector(rewrite_incident_query(query), dimensions=settings.embedding_dim))
+        with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(PGVECTOR_SQL, {"embedding": embedding, "limit": top_k})
+                rows = cur.fetchall()
+        return [_row_to_hit(row, rank, "pgvector") for rank, row in enumerate(rows, start=1)]
+
     def search_hybrid(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
         bm25 = self.search_bm25(query, top_k=50)
         dense = self.search_dense(query, top_k=50)
+        pgvector = self.search_pgvector(query, top_k=50)
         by_id: dict[str, DbNewsHit] = {}
         scores: dict[str, float] = {}
-        for hits in (bm25, dense):
+        for hits in (bm25, dense, pgvector):
             for hit in hits:
                 by_id.setdefault(hit.id, hit)
                 scores[hit.id] = scores.get(hit.id, 0.0) + 1.0 / (60 + hit.rank)
@@ -287,6 +317,15 @@ def _hashed_embedding(text: str, dimensions: int = 256) -> dict[int, float]:
     if not norm:
         return vector
     return {key: value / norm for key, value in vector.items()}
+
+
+def _hashed_dense_vector(text: str, dimensions: int) -> list[float]:
+    sparse = _hashed_embedding(text, dimensions=dimensions)
+    return [sparse.get(index, 0.0) for index in range(dimensions)]
+
+
+def _vector_literal(values: list[float]) -> str:
+    return "[" + ",".join(f"{value:.8f}" for value in values) + "]"
 
 
 def _cosine(left: dict[int, float], right: dict[int, float]) -> float:

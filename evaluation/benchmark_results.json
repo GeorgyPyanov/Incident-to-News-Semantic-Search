@@ -1,0 +1,30 @@
+{
+  "queries": 60,
+  "top_k": 10,
+  "modes": {
+    "bm25": {
+      "mean_latency_ms": 380.53010666626506,
+      "p50_latency_ms": 49.45470002712682,
+      "p95_latency_ms": 2016.9664999702945,
+      "avg_results": 1.55
+    },
+    "dense": {
+      "mean_latency_ms": 357.1963566665848,
+      "p50_latency_ms": 48.57480002101511,
+      "p95_latency_ms": 2826.3728999882005,
+      "avg_results": 2.216666666666667
+    },
+    "pgvector": {
+      "mean_latency_ms": 44.020870000046365,
+      "p50_latency_ms": 44.560100010130554,
+      "p95_latency_ms": 62.761299952398986,
+      "avg_results": 10.0
+    },
+    "hybrid": {
+      "mean_latency_ms": 781.8852600010965,
+      "p50_latency_ms": 142.40559993777424,
+      "p95_latency_ms": 3065.635399892926,
+      "avg_results": 10.0
+    }
+  }
+}

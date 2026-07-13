@@ -56,3 +56,8 @@ def search_dense(request: SearchRequest) -> SearchResponse:
 @app.post("/search/hybrid")
 def search_hybrid(request: SearchRequest) -> SearchResponse:
     return _search("hybrid", request)
+
+
+@app.post("/search/pgvector")
+def search_pgvector(request: SearchRequest) -> SearchResponse:
+    return _search("pgvector", request)

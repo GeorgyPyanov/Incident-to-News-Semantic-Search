@@ -28,7 +28,7 @@ class ApiAppTest(unittest.TestCase):
             service_cls.return_value.search.return_value = [fake_hit]
             client = TestClient(app)
 
-            for path in ("/search/bm25", "/search/dense", "/search/hybrid"):
+            for path in ("/search/bm25", "/search/dense", "/search/pgvector", "/search/hybrid"):
                 response = client.post(path, json={"log": "Example provider outage", "top_k": 1})
 
                 self.assertEqual(response.status_code, 200)

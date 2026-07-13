@@ -73,8 +73,8 @@ Current included Docker dump:
 - `raw_news`: 344 449 rows
 - `raw_logs`: 9 210 rows
 - `news_sources`: 42 rows
-- `structured_events`: 100 rows
-- total selected objects: 353 801 rows
+- `structured_events`: 211 rows
+- total selected objects: 353 912 rows
 
 Relevance checks:
 
@@ -200,6 +200,7 @@ Current validation result on the included dump:
 
 - `bm25`: hit@10 = 0.66
 - `dense`: hit@10 = 1.00
+- `pgvector`: hit@10 = 0.99
 - `hybrid`: hit@10 = 1.00
 
 ## FastAPI Demo
@@ -216,6 +217,7 @@ Search endpoints:
 - `POST /search/bm25`
 - `POST /search/dense`
 - `POST /search/hybrid`
+- `POST /search/pgvector`
 
 Example request:
 

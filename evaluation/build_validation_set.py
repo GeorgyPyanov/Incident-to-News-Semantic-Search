@@ -92,6 +92,26 @@ LIMIT %(limit)s
 """
 
 
+NEGATIVE_SQL = """
+SELECT
+    rn.id::text AS news_id,
+    rn.source_type,
+    rn.source,
+    rn.title,
+    rn.url,
+    rn.published_at
+FROM raw_news rn
+WHERE rn.source_type = %(source_type)s
+  AND rn.id::text <> %(positive_id)s
+  AND (
+      rn.source <> %(source)s
+      OR rn.published_at IS DISTINCT FROM %(published_at)s
+  )
+ORDER BY abs(extract(epoch FROM (coalesce(rn.published_at, now()) - coalesce(%(published_at)s::timestamptz, now()))))
+LIMIT %(limit)s
+"""
+
+
 def fetch_rows(limit_per_source: int) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
@@ -102,9 +122,28 @@ def fetch_rows(limit_per_source: int) -> list[dict[str, Any]]:
     return rows
 
 
-def build_examples(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def fetch_negatives(row: dict[str, Any], limit: int) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                NEGATIVE_SQL,
+                {
+                    "source_type": row["source_type"],
+                    "positive_id": row["news_id"],
+                    "source": row["news_source"],
+                    "published_at": row["published_at"],
+                    "limit": limit,
+                },
+            )
+            return cur.fetchall()
+
+
+def build_examples(rows: list[dict[str, Any]], negatives_per_example: int = 3) -> list[dict[str, Any]]:
     examples: list[dict[str, Any]] = []
     for row in rows:
+        negatives = fetch_negatives(row, negatives_per_example)
         examples.append(
             {
                 "id": f"{row['dataset']}:{row['log_id']}:{row['news_id']}",
@@ -126,6 +165,18 @@ def build_examples(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                         "relevance_reason": row["relevance_reason"],
                     }
                 ],
+                "negative_news": [
+                    {
+                        "news_id": item["news_id"],
+                        "source_type": item["source_type"],
+                        "source": item["source"],
+                        "title": item["title"],
+                        "url": item["url"],
+                        "published_at": item["published_at"].isoformat() if item["published_at"] else None,
+                        "negative_reason": "same_source_type_different_linkage",
+                    }
+                    for item in negatives
+                ],
             }
         )
     return examples
@@ -139,6 +190,7 @@ def write_validation_set(output_path: Path, examples: list[dict[str, Any]]) -> N
             "Statuspage update logs are relevant to statuspage incident reports with the same incident_id.",
             "OSV package log records are relevant to OSV advisory news with the same advisory_id.",
             "GH Archive activity logs are relevant to GitHub release news for the same repository within +/- 1 hour.",
+            "Negative examples use the same source_type but intentionally different linkage.",
         ],
         "examples": examples,
     }
@@ -149,13 +201,14 @@ def write_validation_set(output_path: Path, examples: list[dict[str, Any]]) -> N
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build a validation set from loaded raw_logs/raw_news pairs.")
     parser.add_argument("--limit-per-source", type=int, default=50)
+    parser.add_argument("--negatives-per-example", type=int, default=3)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    examples = build_examples(fetch_rows(args.limit_per_source))
+    examples = build_examples(fetch_rows(args.limit_per_source), args.negatives_per_example)
     write_validation_set(args.output, examples)
     print(f"validation_examples: {len(examples)}")
     print(f"output: {args.output}")

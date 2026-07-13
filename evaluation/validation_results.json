@@ -4,7 +4,16 @@
   "modes": {
     "bm25": {
       "hit_at_k": 0.66,
+      "mrr_at_k": 0.6020634920634921,
+      "recall_at_k": 0.66,
+      "ndcg_at_k": 0.6168170471362784,
       "hits": 99,
+      "negative_hit_at_k": 0.0,
+      "latency_ms": {
+        "mean": 783.4947420004755,
+        "p50": 60.73080003261566,
+        "p95": 2559.3460999662057
+      },
       "per_dataset": {
         "statuspage_incidents": {
           "examples": 50,
@@ -97,7 +106,16 @@
     },
     "dense": {
       "hit_at_k": 1.0,
+      "mrr_at_k": 0.9546666666666666,
+      "recall_at_k": 1.0,
+      "ndcg_at_k": 0.9663867323339468,
       "hits": 150,
+      "negative_hit_at_k": 0.0,
+      "latency_ms": {
+        "mean": 1399.531589334365,
+        "p50": 741.1356000229716,
+        "p95": 3595.0723999994807
+      },
       "per_dataset": {
         "statuspage_incidents": {
           "examples": 50,
@@ -117,9 +135,64 @@
       },
       "sample_misses": []
     },
+    "pgvector": {
+      "hit_at_k": 0.9866666666666667,
+      "mrr_at_k": 0.9465079365079365,
+      "recall_at_k": 0.9866666666666667,
+      "ndcg_at_k": 0.9565350998060592,
+      "hits": 148,
+      "negative_hit_at_k": 0.52,
+      "latency_ms": {
+        "mean": 53.917070666793734,
+        "p50": 52.38670000107959,
+        "p95": 75.13750001089647
+      },
+      "per_dataset": {
+        "statuspage_incidents": {
+          "examples": 50,
+          "hits": 49,
+          "hit_at_k": 0.98
+        },
+        "osv_advisories": {
+          "examples": 50,
+          "hits": 49,
+          "hit_at_k": 0.98
+        },
+        "gharchive_open_source": {
+          "examples": 50,
+          "hits": 50,
+          "hit_at_k": 1.0
+        }
+      },
+      "sample_misses": [
+        {
+          "example_id": "statuspage_incidents:c19bf6fe-54b6-459f-b6e5-8de7cd2fefca:615e1086-1d13-40f3-9183-edd1dfa359a1",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "615e1086-1d13-40f3-9183-edd1dfa359a1"
+          ]
+        },
+        {
+          "example_id": "osv_advisories:8b70f8de-a723-4c01-8825-72cd74904e2f:d1969e0b-3318-4f98-8c50-258791f6a2c8",
+          "dataset": "osv_advisories",
+          "relevant_news_ids": [
+            "d1969e0b-3318-4f98-8c50-258791f6a2c8"
+          ]
+        }
+      ]
+    },
     "hybrid": {
       "hit_at_k": 1.0,
+      "mrr_at_k": 0.9633333333333334,
+      "recall_at_k": 1.0,
+      "ndcg_at_k": 0.9729348485952403,
       "hits": 150,
+      "negative_hit_at_k": 0.4866666666666667,
+      "latency_ms": {
+        "mean": 2237.100595999897,
+        "p50": 2991.6607999475673,
+        "p95": 3987.6634000684135
+      },
       "per_dataset": {
         "statuspage_incidents": {
           "examples": 50,
