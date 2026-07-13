@@ -1,9 +1,14 @@
 # Incident-to-News-Semantic-Search
 
-A starter incident-to-news search pipeline that connects incident logs with semantically
-relevant news articles and adds a concise explanation for each retrieved result.
+A project for connecting incident/status logs with semantically relevant news,
+incident reports, project activity, and security advisories.
 
-## Data Flow
+## Pipeline Tasks
+
+The task-oriented pipeline connects an original log to candidate articles and
+adds concise reasoning for each retrieved result.
+
+Data flow:
 
 1. `event_extraction` turns an original log into typed `IncidentData`.
 2. `retrieval` ranks candidate `NewsArticle` records.
@@ -16,7 +21,7 @@ When the reasoner cannot find concrete shared evidence, it returns:
 No strong connection could be identified.
 ```
 
-## Folder Structure
+Current folders:
 
 ```text
 .
@@ -30,42 +35,133 @@ No strong connection could be identified.
 `-- tests/
 ```
 
+## Database And Dataset Scope
+
+Done for the database/data-loading stage:
+
+- PostgreSQL schema and migrations.
+- `raw_news` table for news/event records.
+- `raw_logs` table for availability/status update logs.
+- Dataset import script with more than 50 000 objects.
+- Database count check script.
+- Docker-ready compressed PostgreSQL dump.
+
+Current dataset choice:
+
+- Recent news/events: GDELT 2.1 Events from the latest 15-minute export files.
+- Targeted tech news/discussions: Hacker News Algolia stories queried by
+  provider + outage/incident/status keywords.
+- Targeted real news: Google News RSS stories queried by provider +
+  outage/down/incident/status keywords.
+- Open-source security advisories: OSV.dev advisories for popular PyPI, npm,
+  Go, Maven, and crates.io packages.
+- Open-source project activity/news: GH Archive public GitHub events. Release
+  events are stored as `github_release` news, and matching GitHub activity
+  events are stored as logs.
+- Availability/status logs: public Statuspage incident APIs for GitHub,
+  Cloudflare, OpenAI, Discord, Reddit, Datadog, Atlassian, Twilio, SendGrid,
+  DigitalOcean, Vercel, Netlify, Supabase, Anthropic, Shopify, and Zoom.
+- Status incident reports are also stored in `raw_news` as
+  `statuspage_incident`, so each update log can be joined back to its incident
+  by `raw_payload.incident_id`.
+
+The old AG News / Loghub Apache / GDELT 2005 rows were removed from the local
+database because their timeline did not match the availability-log task.
+
+Current included Docker dump:
+
+- `raw_news`: 344 449 rows
+- `raw_logs`: 9 210 rows
+- `news_sources`: 42 rows
+- total selected objects: 353 701 rows
+
+Relevance checks:
+
+- 7 882 status update logs have direct linked incident reports.
+- 5 805 status update logs have Hacker News provider/time candidates.
+- 3 938 status update logs have Google News provider/time candidates.
+- 417 GitHub activity logs have matching GitHub release rows.
+- 860 OSV package events have direct linked security advisories.
+
+Open-source subset:
+
+- 300 GH Archive projects selected
+- 409 `github_release` rows
+- 468 `gharchive_open_source` log rows
+
 ## Setup
 
-Clone the repository and move into the project directory:
-
-```bash
-git clone <repository-url>
-cd Incident-to-News-Semantic-Search
+```powershell
+py -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-Create a local environment file:
+For the included Docker PostgreSQL:
 
-```bash
-cp .env.example .env
+```dotenv
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search
+EMBEDDING_DIM=1024
 ```
 
-Update `.env` with the API keys, database URL, and runtime settings for your environment.
+## Run Database
 
-## Create a Virtual Environment
-
-On macOS or Linux:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-On Windows PowerShell:
+The repository includes a compressed PostgreSQL dump at
+`database/initdb/001_incident_news_search.sql.gz`. On a fresh Docker volume,
+PostgreSQL restores it automatically through `/docker-entrypoint-initdb.d`.
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+docker compose up -d postgres
 ```
 
-## Install Dependencies
+If you already have an old local Docker volume and need to reload the included
+dump from scratch:
 
-No external dependencies are required for the current unit-tested pipeline.
+```powershell
+docker compose down -v
+docker compose up -d postgres
+```
+
+## Apply Migrations
+
+Only run migrations when creating an empty database without the included dump.
+The included dump already contains the schema and loaded data.
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m database.migrate
+```
+
+## Load Current Dataset
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m data.import_datasets --news-limit 0 --logs-limit 0 --gdelt-limit 0 --statuspage-limit 5000 --hn-limit-per-provider 100 --google-news-limit-per-provider 80 --osv-limit-per-package 100 --gdeltv2-limit 250000 --gdeltv2-start 2026-06-01 --gdeltv2-end 2026-07-07 --gdeltv2-max-files 400 --gdeltv2-max-files-per-day 8 --gharchive-projects 300 --gharchive-log-limit 50000 --gharchive-news-limit 2000
+```
+
+## Check Loaded Rows
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m database.check
+```
+
+## Check Relevance Coverage
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m database.relevance_check
+```
+
+## Long Real-Source Harvest
+
+Continuously harvest paired real sources without Loghub:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m data.harvest_real_sources --duration-hours 6 --interval-minutes 30 --statuspage-limit 5000 --hn-limit-per-provider 100 --osv-limit-per-package 20 --gdeltv2-limit 10000 --gdeltv2-max-files 24 --gharchive-projects 300 --gharchive-log-limit 50000 --gharchive-news-limit 2000 --gharchive-lookback-hours 6
+```
+
+Progress is written to `logs/harvest_real_sources.log`.
 
 ## Run Tests
 
@@ -82,8 +178,9 @@ evaluation/data/evaluation_dataset.json
 ```
 
 Each query contains an `incident_log`, a list of `candidate_articles`, and
-`relevant_article_ids`. To prepare a new dataset, keep the same JSON structure and use
-deterministic, non-production examples so local and CI runs are reproducible.
+`relevant_article_ids`. To prepare a new dataset, keep the same JSON structure
+and use deterministic, non-production examples so local and CI runs are
+reproducible.
 
 ## Run Retrieval Evaluation
 
@@ -117,17 +214,18 @@ The command also prints a comparison table in the console.
 - `MAP`: mean average precision across all evaluated queries.
 - `nDCG@k`: ranking quality at `k`, giving more credit when relevant articles appear higher.
 
-## Dense, Sparse, and Hybrid Retrieval
+## Dense, Sparse, And Hybrid Retrieval
 
-The branch now also includes a PostgreSQL-backed retrieval path for incident-to-news matching.
-This is separate from the in-memory pipeline above and is meant for the later tasks around
-embeddings, pgvector search, BM25 baseline search, and hybrid ranking.
+The branch also includes a PostgreSQL-backed retrieval path for incident-to-news
+matching. This is separate from the in-memory pipeline above and is meant for
+later tasks around embeddings, pgvector search, BM25 baseline search, and hybrid
+ranking.
 
 What is included:
 
 - incident text normalization for embeddings and lexical search
 - OpenAI embedding generation for incident logs
-- PostgreSQL schema with `vector(1536)` columns
+- PostgreSQL schema with vector columns
 - HNSW indexes for dense search
 - GIN + `tsvector` support for BM25-style full-text search
 - reciprocal rank fusion for hybrid search
@@ -142,5 +240,6 @@ python -m retrieval.cli fulltext-search --query-text "API timeout deploy"
 python -m retrieval.cli benchmark-dense --query-embedding "[0.1, 0.2, 0.3]" --limit 10
 ```
 
-The benchmark command prints latency for the indexed path and for the path with index usage
-disabled, plus `EXPLAIN ANALYZE` output so you can verify whether HNSW is really chosen.
+The benchmark command prints latency for the indexed path and for the path with
+index usage disabled, plus `EXPLAIN ANALYZE` output so you can verify whether
+HNSW is really chosen.

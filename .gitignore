@@ -25,3 +25,5 @@ Thumbs.db
 # Local cache/data artifacts
 data/cache/
 cache/
+.tmp_agents_source/
+.tmp_agents_source_full/
