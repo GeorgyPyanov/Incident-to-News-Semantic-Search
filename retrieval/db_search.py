@@ -6,10 +6,19 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
-import psycopg
-from psycopg.rows import dict_row
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ImportError:  # pragma: no cover - exercised when optional DB deps are unavailable.
+    psycopg = None  # type: ignore[assignment]
+    dict_row = None  # type: ignore[assignment]
 
-from database.migrate import _postgres_url
+try:
+    from database.migrate import _postgres_url
+except ImportError:  # pragma: no cover - exercised when optional DB deps are unavailable.
+    def _postgres_url(database_url: str) -> str:
+        return database_url
+
 from database.settings import settings
 from retrieval.query_rewrite import rewrite_incident_query
 
@@ -184,6 +193,8 @@ class DbNewsSearchService:
         return self.search_hybrid(query, top_k)
 
     def search_bm25(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
+        if psycopg is None or dict_row is None:
+            raise RuntimeError("Database search requires the optional psycopg dependency.")
         with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 rows_by_id: dict[str, dict] = {}
@@ -212,6 +223,8 @@ class DbNewsSearchService:
         ]
 
     def search_pgvector(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
+        if psycopg is None or dict_row is None:
+            raise RuntimeError("Database search requires the optional psycopg dependency.")
         embedding = _vector_literal(_hashed_dense_vector(rewrite_incident_query(query), dimensions=settings.embedding_dim))
         with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
             with conn.cursor() as cur:
@@ -243,6 +256,8 @@ class DbNewsSearchService:
         ]
 
     def _candidate_rows(self, query: str, limit: int) -> list[dict]:
+        if psycopg is None or dict_row is None:
+            raise RuntimeError("Database search requires the optional psycopg dependency.")
         with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 rows_by_id: dict[str, dict] = {}

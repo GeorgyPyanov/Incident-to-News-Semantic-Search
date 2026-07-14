@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol, Sequence
 
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except ImportError:  # pragma: no cover - exercised when the optional dependency is absent.
+    OpenAI = None  # type: ignore[assignment]
 
 
 class EmbeddingClient(Protocol):
@@ -17,9 +20,12 @@ class EmbeddingClient(Protocol):
 class OpenAIEmbeddingClient:
     model: str = "text-embedding-3-small"
     api_key: str | None = None
+    _client: object = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         # Keep the OpenAI client lazy and isolated behind a tiny adapter.
+        if OpenAI is None:
+            raise RuntimeError("The 'openai' package is required to use OpenAIEmbeddingClient.")
         self._client = OpenAI(api_key=self.api_key)
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
@@ -32,4 +38,3 @@ class OpenAIEmbeddingClient:
 
     def embed_text(self, text: str) -> list[float]:
         return self.embed_texts([text])[0]
-

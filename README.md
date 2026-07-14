@@ -242,8 +242,16 @@ Progress is written to `logs/harvest_real_sources.log`.
 ## Run Tests
 
 ```bash
-python -m unittest discover
+python -m unittest discover -v
 ```
+
+Current test coverage includes:
+
+- `tests/test_embeddings.py` for OpenAI embedding generation behavior
+- `tests/test_e2e_pipeline.py` for the end-to-end extraction -> retrieval -> reasoning path
+- `tests/test_pipeline.py` and the existing evaluation and API tests for the current project flow
+
+The full suite is expected to pass locally before changes are merged.
 
 ## Evaluation Dataset
 
