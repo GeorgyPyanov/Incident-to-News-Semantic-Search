@@ -282,6 +282,100 @@ evaluation/results.csv
 
 The command also prints a comparison table in the console.
 
+## Benchmark Retrieval Performance
+
+Two benchmarks are available and write to separate result files.
+
+The synthetic benchmark uses the small three-query evaluation dataset and an
+in-memory exact-cosine index. It is dependency-light and intended for local and
+CI regression checks:
+
+```bash
+python -m evaluation.benchmark_search
+```
+
+The command times document embedding and exact-cosine index construction
+separately, performs one warm-up search, and reports latency statistics for 100
+measured searches. It also records the dataset, model, index, platform, CPU,
+RAM, and GPU (or `No GPU`) details. Results are printed to the console and saved
+to:
+
+```text
+evaluation/benchmark_results.json
+```
+
+Use `--searches`, `--top-k`, `--dimensions`, `--dataset`, or `--output` to
+override benchmark settings. `--searches` must be at least 100.
+
+### Real PostgreSQL/pgvector Benchmark
+
+The real benchmark uses representative queries from the 150-example validation
+set, the existing `structured_events` embeddings, the production query
+vectorizer and dense-search SQL, and the existing pgvector HNSW index. Its safe
+default is read-only: it neither generates embeddings nor rebuilds the index.
+
+Requirements:
+
+- install `requirements.txt` (including `psycopg`);
+- start the included PostgreSQL/pgvector database;
+- set `DATABASE_URL` and `EMBEDDING_DIM` as shown in `.env.example`;
+- ensure the database migrations, structured events, embeddings, and HNSW index
+  already exist.
+
+Safe read-only benchmark command:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+$env:EMBEDDING_DIM='1024'
+python -m evaluation.benchmark_real
+```
+
+Results are printed and saved separately to:
+
+```text
+evaluation/benchmark_real_results.json
+```
+
+Embedding generation is opt-in and only fills currently missing
+`structured_events.embedding` values using the existing generator:
+
+```powershell
+python -m evaluation.benchmark_real --generate-embeddings --embedding-limit 1000
+```
+
+Rebuilding the existing production HNSW index is also opt-in:
+
+```powershell
+python -m evaluation.benchmark_real --rebuild-index
+```
+
+Both optional flags modify the database and can be combined when explicitly
+needed. The real result includes PostgreSQL-reported index size and
+configuration, separate query-embedding/database/end-to-end latency statistics,
+and an `EXPLAIN ANALYZE` summary showing whether the HNSW index or a sequential
+scan was used. The existing synthetic result remains at
+`evaluation/benchmark_results.json` and is never overwritten by this command.
+
+### Safe Document Embedding Benchmark
+
+Benchmark the exact production `structured_events` text preparation and
+`hashing-vectorizer-1024` generator on 100 existing documents, entirely in
+memory:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+$env:EMBEDDING_DIM='1024'
+python -m evaluation.benchmark_real --benchmark-document-embeddings
+```
+
+Use `--embedding-sample-size N` to change the default sample size of 100. This
+mode performs one untimed warm-up, runs inside a read-only PostgreSQL
+transaction, and cannot be combined with `--generate-embeddings` or
+`--rebuild-index`. Vectors are generated in memory and never persisted. The
+result is stored under `document_embedding_benchmark` in
+`evaluation/benchmark_real_results.json`; the existing real retrieval and
+synthetic benchmark commands remain unchanged.
+
 ## Evaluation Metrics
 
 - `Precision@k`: the fraction of the top `k` retrieved articles that are relevant.

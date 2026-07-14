@@ -1,0 +1,145 @@
+{
+  "benchmark_type": "real_postgresql_pgvector",
+  "timestamp": "2026-07-14T09:55:01.379529+00:00",
+  "platform": {
+    "system": "Windows",
+    "release": "11",
+    "machine": "AMD64",
+    "python_version": "3.14.6",
+    "cpu": {
+      "model": "13th Gen Intel(R) Core(TM) i5-1335U",
+      "logical_cores": 12,
+      "physical_cores": 10
+    },
+    "total_ram_bytes": 16847880192,
+    "gpu": {
+      "model": "No GPU",
+      "vram_bytes": null
+    }
+  },
+  "database": {
+    "table": "structured_events",
+    "read_only_default": true,
+    "read_only_run": true
+  },
+  "dataset": {
+    "validation_set": "evaluation\\data\\validation_set.json",
+    "available_queries": 150,
+    "measured_query_executions": 100
+  },
+  "embedding": {
+    "provider": "local",
+    "model": "hashing-vectorizer-1024",
+    "models_present": [
+      "hashing-vectorizer-1024"
+    ],
+    "vector_dimension": 1024,
+    "embedded_documents": 211,
+    "total_documents": 211,
+    "requested": false,
+    "documents_generated": 0,
+    "batch_size": 1,
+    "total_generation_time_seconds": null,
+    "average_time_per_document_seconds": null,
+    "throughput_documents_per_second": null
+  },
+  "index": {
+    "name": "ix_structured_events_embedding",
+    "type": "hnsw",
+    "configuration": {
+      "m": 16,
+      "ef_construction": 64,
+      "operator_class": "vector_cosine_ops",
+      "partial_predicate": "embedding IS NOT NULL"
+    },
+    "definition": "CREATE INDEX ix_structured_events_embedding ON public.structured_events USING hnsw (embedding vector_cosine_ops) WITH (m='16', ef_construction='64') WHERE (embedding IS NOT NULL)",
+    "size_on_disk_bytes": 1736704,
+    "total_size_on_disk_bytes": 1736704,
+    "rebuild_requested": false,
+    "build_time_seconds": null
+  },
+  "search": {
+    "top_k": 10,
+    "warmup_searches": 1,
+    "measured_searches": 100,
+    "clock": "time.perf_counter",
+    "query_embedding_latency_ms": {
+      "mean": 0.2792759845033288,
+      "median": 0.2609000075608492,
+      "p95": 0.31915975268930197,
+      "min": 0.21639978513121605,
+      "max": 1.2483997270464897
+    },
+    "provider_api_latency_ms": null,
+    "database_index_search_latency_ms": {
+      "mean": 1.297309990040958,
+      "median": 1.1855498887598515,
+      "p95": 2.0563999423757195,
+      "min": 0.9361999109387398,
+      "max": 3.3428999595344067
+    },
+    "end_to_end_retrieval_latency_ms": {
+      "mean": 1.57748703379184,
+      "median": 1.4543503057211637,
+      "p95": 2.4003203026950355,
+      "min": 1.1877999641001225,
+      "max": 3.6168000660836697
+    }
+  },
+  "explain_analyze": {
+    "index_used": true,
+    "hnsw_index_used": true,
+    "sequential_scan_used": false,
+    "node_types": [
+      "Limit",
+      "Nested Loop",
+      "Index Scan",
+      "Index Scan"
+    ],
+    "index_names": [
+      "ix_structured_events_embedding",
+      "raw_news_pkey"
+    ],
+    "sequential_scan_tables": [],
+    "planning_time_ms": 0.12,
+    "execution_time_ms": 0.265
+  },
+  "document_embedding_benchmark": {
+    "provider": "local",
+    "model": "hashing-vectorizer-1024",
+    "vector_dimension": 1024,
+    "sample_size": 100,
+    "batch_size": 1,
+    "warmup_documents": 1,
+    "clock": "time.perf_counter",
+    "total_generation_time_seconds": 0.014351800084114075,
+    "per_document_latency_ms": {
+      "mean": 0.14314899686723948,
+      "median": 0.12709968723356724,
+      "p95": 0.23420513607561586,
+      "min": 0.0820998102426529,
+      "max": 0.2749003469944
+    },
+    "throughput_documents_per_second": 6967.767068514941,
+    "gpu_used": false,
+    "hardware": {
+      "cpu": {
+        "model": "13th Gen Intel(R) Core(TM) i5-1335U",
+        "logical_cores": 12,
+        "physical_cores": 10
+      },
+      "total_ram_bytes": 16847880192,
+      "gpu": {
+        "model": "No GPU",
+        "vram_bytes": null
+      }
+    },
+    "database_writes_performed": false,
+    "embeddings_persisted": false,
+    "index_modified": false,
+    "source_functions": [
+      "data.embed_structured_events._event_text",
+      "data.embed_structured_events._hashed_vector"
+    ]
+  }
+}

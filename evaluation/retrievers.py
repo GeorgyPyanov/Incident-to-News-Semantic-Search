@@ -43,7 +43,7 @@ class KeywordRetriever:
     ) -> list[RetrievedNewsResult]:
         query_tokens = _tokens(incident_log)
         results = [
-            RetrievedNewsResult(article=article, score=_jaccard(query_tokens, _tokens(_article_text(article))))
+            RetrievedNewsResult(article=article, score=_jaccard(query_tokens, _tokens(article_embedding_text(article))))
             for article in candidate_articles
         ]
         return _rank(results, top_k, self.min_score)
@@ -69,11 +69,14 @@ class SemanticEmbeddingRetriever:
         candidate_articles: tuple[NewsArticle, ...],
         top_k: int,
     ) -> list[RetrievedNewsResult]:
-        query_vector = _text_embedding(incident_log, self.dimensions)
+        query_vector = generate_text_embedding(incident_log, self.dimensions)
         results = [
             RetrievedNewsResult(
                 article=article,
-                score=_cosine_similarity(query_vector, _text_embedding(_article_text(article), self.dimensions)),
+                score=cosine_similarity(
+                    query_vector,
+                    generate_text_embedding(article_embedding_text(article), self.dimensions),
+                ),
             )
             for article in candidate_articles
         ]
@@ -104,12 +107,15 @@ class HybridRetriever:
         top_k: int,
     ) -> list[RetrievedNewsResult]:
         query_tokens = _tokens(incident_log)
-        query_vector = _text_embedding(incident_log, self.dimensions)
+        query_vector = generate_text_embedding(incident_log, self.dimensions)
         results: list[RetrievedNewsResult] = []
         for article in candidate_articles:
-            article_text = _article_text(article)
+            article_text = article_embedding_text(article)
             lexical_score = _jaccard(query_tokens, _tokens(article_text))
-            semantic_score = _cosine_similarity(query_vector, _text_embedding(article_text, self.dimensions))
+            semantic_score = cosine_similarity(
+                query_vector,
+                generate_text_embedding(article_text, self.dimensions),
+            )
             score = (self.lexical_weight * lexical_score) + (self.semantic_weight * semantic_score)
             results.append(RetrievedNewsResult(article=article, score=score))
         return _rank(results, top_k, self.min_score)
@@ -146,7 +152,7 @@ def _tokens(text: str | None) -> set[str]:
     return {match.group(0).lower() for match in TOKEN_PATTERN.finditer(text or "")}
 
 
-def _article_text(article: NewsArticle) -> str:
+def article_embedding_text(article: NewsArticle) -> str:
     return " ".join(
         part
         for part in (
@@ -165,7 +171,7 @@ def _jaccard(left: set[str], right: set[str]) -> float:
     return len(left & right) / len(left | right)
 
 
-def _text_embedding(text: str | None, dimensions: int) -> tuple[float, ...]:
+def generate_text_embedding(text: str | None, dimensions: int) -> tuple[float, ...]:
     vector = [0.0] * dimensions
     tokens = sorted(_tokens(text))
     if not tokens:
@@ -195,7 +201,7 @@ def _normalize(vector: tuple[float, ...]) -> tuple[float, ...]:
     return tuple(value / norm for value in vector)
 
 
-def _cosine_similarity(left: tuple[float, ...], right: tuple[float, ...]) -> float:
+def cosine_similarity(left: tuple[float, ...], right: tuple[float, ...]) -> float:
     if not left or not right:
         return 0.0
     return sum(left_value * right_value for left_value, right_value in zip(left, right))
@@ -205,4 +211,3 @@ def _rank(results: list[RetrievedNewsResult], top_k: int, min_score: float) -> l
     filtered = [result for result in results if result.score >= min_score]
     filtered.sort(key=lambda result: (-result.score, result.article.id))
     return filtered[:top_k]
-
