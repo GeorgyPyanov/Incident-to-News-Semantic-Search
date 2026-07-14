@@ -1,0 +1,124 @@
+{
+  "validation_set": "evaluation\\data\\validation_blind.json",
+  "qrels": "evaluation\\data\\qrels.jsonl",
+  "queries": 150,
+  "top_k": 10,
+  "modes": {
+    "bm25": {
+      "ndcg_at_k": 0.2914550646130195,
+      "mrr_at_k": 0.31166666666666665,
+      "recall_at_k": 0.20388888888888887,
+      "precision_at_k": 0.26816666666666666,
+      "hard_negative_hit_at_k": 0.0,
+      "latency_ms": {
+        "mean": 45.481890000325315,
+        "p50": 23.648800037335604,
+        "p95": 102.35800000373274
+      },
+      "per_dataset": {
+        "statuspage_incidents": {
+          "queries": 50,
+          "ndcg_at_k": 0.7926048354997696,
+          "mrr_at_k": 0.835
+        },
+        "osv_advisories": {
+          "queries": 50,
+          "ndcg_at_k": 0.08176035833928882,
+          "mrr_at_k": 0.1
+        },
+        "gharchive_open_source": {
+          "queries": 50,
+          "ndcg_at_k": 0.0,
+          "mrr_at_k": 0.0
+        }
+      }
+    },
+    "dense": {
+      "ndcg_at_k": 0.5174188782950417,
+      "mrr_at_k": 0.5503492063492064,
+      "recall_at_k": 0.3655555555555556,
+      "precision_at_k": 0.32483333333333336,
+      "hard_negative_hit_at_k": 0.13333333333333333,
+      "latency_ms": {
+        "mean": 1304.798846669728,
+        "p50": 1627.826499985531,
+        "p95": 3024.4800000218675
+      },
+      "per_dataset": {
+        "statuspage_incidents": {
+          "queries": 50,
+          "ndcg_at_k": 0.7967129608753646,
+          "mrr_at_k": 0.83
+        },
+        "osv_advisories": {
+          "queries": 50,
+          "ndcg_at_k": 0.4384867103594391,
+          "mrr_at_k": 0.4610476190476191
+        },
+        "gharchive_open_source": {
+          "queries": 50,
+          "ndcg_at_k": 0.31705696365032116,
+          "mrr_at_k": 0.36
+        }
+      }
+    },
+    "pgvector": {
+      "ndcg_at_k": 0.8390385025277389,
+      "mrr_at_k": 0.9001851851851851,
+      "recall_at_k": 0.6577777777777778,
+      "precision_at_k": 0.166,
+      "hard_negative_hit_at_k": 0.41333333333333333,
+      "latency_ms": {
+        "mean": 26.15018466836773,
+        "p50": 23.606900009326637,
+        "p95": 41.31919995415956
+      },
+      "per_dataset": {
+        "statuspage_incidents": {
+          "queries": 50,
+          "ndcg_at_k": 0.9152809662362139,
+          "mrr_at_k": 0.9216666666666667
+        },
+        "osv_advisories": {
+          "queries": 50,
+          "ndcg_at_k": 0.7303425837758156,
+          "mrr_at_k": 0.7788888888888889
+        },
+        "gharchive_open_source": {
+          "queries": 50,
+          "ndcg_at_k": 0.871491957571187,
+          "mrr_at_k": 1.0
+        }
+      }
+    },
+    "hybrid": {
+      "ndcg_at_k": 0.7159714150283654,
+      "mrr_at_k": 0.7054708994708995,
+      "recall_at_k": 0.6477777777777778,
+      "precision_at_k": 0.162,
+      "hard_negative_hit_at_k": 0.3933333333333333,
+      "latency_ms": {
+        "mean": 1376.5118680067826,
+        "p50": 1672.033799928613,
+        "p95": 3099.6590001159348
+      },
+      "per_dataset": {
+        "statuspage_incidents": {
+          "queries": 50,
+          "ndcg_at_k": 0.895927661352863,
+          "mrr_at_k": 0.8984126984126984
+        },
+        "osv_advisories": {
+          "queries": 50,
+          "ndcg_at_k": 0.6448408843992937,
+          "mrr_at_k": 0.6223333333333332
+        },
+        "gharchive_open_source": {
+          "queries": 50,
+          "ndcg_at_k": 0.6071456993329392,
+          "mrr_at_k": 0.5956666666666663
+        }
+      }
+    }
+  }
+}

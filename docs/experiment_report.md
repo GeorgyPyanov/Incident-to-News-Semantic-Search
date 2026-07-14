@@ -30,7 +30,13 @@ The included Docker dump contains:
 - `structured_events`: 211
 - total counted objects: 353 912
 
-The validation set contains 150 labeled queries:
+The project now keeps two validation views over the same 150 labeled queries:
+
+- `validation_linked.json`: source-linked sanity validation with strong labels.
+- `validation_blind.json`: direct IDs and title-like query prefixes removed.
+- `qrels.jsonl`: graded relevance judgments for blind evaluation.
+
+The base set contains:
 
 - 50 Statuspage logs linked to incident reports by `incident_id`
 - 50 OSV logs linked to advisories by `advisory_id`
@@ -38,6 +44,12 @@ The validation set contains 150 labeled queries:
 
 Each validation example also includes hard negatives from the same `source_type`
 with different linkage.
+
+The graded qrels use:
+
+- `3`: same incident/advisory/release
+- `1`: topically related hard negative
+- `0`: unrelated or different-linkage negative
 
 ## Iterations
 
@@ -95,7 +107,7 @@ System metrics:
 - p95 latency
 - average number of returned results
 
-Current validation summary:
+Current linked-validation summary:
 
 | Mode | hit@10 | MRR@10 | nDCG@10 | negative-hit@10 |
 | --- | ---: | ---: | ---: | ---: |
@@ -103,6 +115,19 @@ Current validation summary:
 | Dense | 1.00 | 0.95 | 0.97 | 0.00 |
 | pgvector | 0.99 | 0.95 | 0.96 | 0.52 |
 | Hybrid | 1.00 | 0.96 | 0.97 | 0.49 |
+
+Current blind qrels summary:
+
+| Mode | nDCG@10 | MRR@10 | Recall@10 | Precision@10 | Hard-negative hit@10 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| BM25 | 0.29 | 0.31 | 0.20 | 0.27 | 0.00 |
+| Dense | 0.52 | 0.55 | 0.37 | 0.32 | 0.13 |
+| pgvector | 0.84 | 0.90 | 0.66 | 0.17 | 0.41 |
+| Hybrid | 0.72 | 0.71 | 0.65 | 0.16 | 0.39 |
+
+This blind qrels result is the more honest offline estimate. The linked result
+is useful as a pipeline sanity check but overstates semantic retrieval quality
+because some queries contain strong source-specific identifiers.
 
 Current benchmark on 60 validation queries:
 

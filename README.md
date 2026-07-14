@@ -170,7 +170,7 @@ py -m data.extract_structured_events --limit 1000
 
 ## Validation Set
 
-The validation set is stored at:
+The linked validation set is stored at:
 
 ```text
 evaluation/data/validation_set.json
@@ -182,26 +182,50 @@ It contains 150 labeled log-news examples:
 - 50 OSV package logs linked to advisories by `advisory_id`
 - 50 GH Archive activity logs linked to GitHub releases by repository and time window
 
-Regenerate it from the loaded database with:
+Regenerate the linked validation set from the loaded database with:
 
 ```powershell
 $env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
 py -m evaluation.build_validation_set --limit-per-source 50
 ```
 
-Run retrieval validation:
+Build the linked/blind validation views and graded qrels:
+
+```powershell
+py -m evaluation.build_validation_views
+```
+
+Run linked retrieval validation:
 
 ```powershell
 $env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
 py -m evaluation.validate_retrieval --top-k 10
 ```
 
-Current validation result on the included dump:
+Run blind graded validation:
+
+```powershell
+$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m evaluation.validate_qrels --top-k 10
+```
+
+Current linked-validation result on the included dump:
 
 - `bm25`: hit@10 = 0.66
 - `dense`: hit@10 = 1.00
 - `pgvector`: hit@10 = 0.99
 - `hybrid`: hit@10 = 1.00
+
+Current blind qrels result on the included dump:
+
+- `bm25`: nDCG@10 = 0.29, MRR@10 = 0.31
+- `dense`: nDCG@10 = 0.52, MRR@10 = 0.55
+- `pgvector`: nDCG@10 = 0.84, MRR@10 = 0.90
+- `hybrid`: nDCG@10 = 0.72, MRR@10 = 0.71
+
+`validation_set.json` is the linked sanity view, while `validation_blind.json`
+and `qrels.jsonl` are the evaluation artifacts that should be used for the
+honest offline report.
 
 ## FastAPI Demo
 
