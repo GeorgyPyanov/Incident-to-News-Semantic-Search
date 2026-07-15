@@ -339,8 +339,14 @@ def default_document_embedder(row: dict[str, Any], dimension: int) -> list[float
         from retrieval.embeddings import build_document_text, validate_embedding_dimension
     except ImportError as error:
         raise RuntimeError("Document embedding benchmarking requires requirements.txt") from error
-    vector = _benchmark_embedding_client(dimension).embed_text(build_document_text(_event_text(row)))
-    validate_embedding_dimension(vector, dimension, _benchmark_embedding_client(dimension).model_name)
+    client = _benchmark_embedding_client(
+        dimension,
+        backend=os.environ.get("EMBEDDING_BACKEND", "auto"),
+        model=os.environ.get("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
+        quantization=os.environ.get("EMBEDDING_QUANTIZATION", "none"),
+    )
+    vector = client.embed_text(build_document_text(_event_text(row)))
+    validate_embedding_dimension(vector, dimension, client.model_name)
     return vector
 
 
@@ -494,8 +500,14 @@ def default_query_embedder(query: str, dimension: int) -> str:
     except ImportError as error:
         raise RuntimeError("Real benchmarking requires the dependencies in requirements.txt") from error
 
-    vector = _benchmark_embedding_client(dimension).embed_text(build_query_text(rewrite_incident_query(query)))
-    validate_embedding_dimension(vector, dimension, _benchmark_embedding_client(dimension).model_name)
+    client = _benchmark_embedding_client(
+        dimension,
+        backend=os.environ.get("EMBEDDING_BACKEND", "auto"),
+        model=os.environ.get("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
+        quantization=os.environ.get("EMBEDDING_QUANTIZATION", "none"),
+    )
+    vector = client.embed_text(build_query_text(rewrite_incident_query(query)))
+    validate_embedding_dimension(vector, dimension, client.model_name)
     return _vector_literal(vector)
 
 
@@ -509,16 +521,22 @@ def default_embedding_generator(limit: int) -> int:
 
 
 @lru_cache(maxsize=None)
-def _benchmark_embedding_client(dimension: int):
+def _benchmark_embedding_client(
+    dimension: int,
+    backend: str | None = None,
+    model: str | None = None,
+    quantization: str | None = None,
+):
     try:
         from retrieval.embeddings import build_embedding_client
     except ImportError as error:
         raise RuntimeError("Real benchmarking requires the dependencies in requirements.txt") from error
 
     return build_embedding_client(
-        backend=os.environ.get("EMBEDDING_BACKEND", "auto"),
-        model=os.environ.get("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
+        backend=backend or os.environ.get("EMBEDDING_BACKEND", "auto"),
+        model=model or os.environ.get("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
         dimensions=dimension,
+        quantization=quantization or os.environ.get("EMBEDDING_QUANTIZATION", "none"),
     )
 
 

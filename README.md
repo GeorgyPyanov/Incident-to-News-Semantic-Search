@@ -15,11 +15,12 @@ context.
 The system has the four required search components:
 
 - vectorization model: local sentence-transformer embeddings for structured
-  events
+  events, with optional CPU dynamic quantization for embedding inference
 - vector storage: PostgreSQL with pgvector
 - index: HNSW over `structured_events.embedding`
-- search algorithm: BM25, dense pgvector retrieval, reciprocal-rank fusion,
-  heuristic scoring, and optional LLM reranking (DeepSeek)
+- search algorithm: BM25, dense pgvector retrieval, configurable fusion
+  (`rrf` or `normalized_sum`), heuristic scoring, and optional LLM reranking
+  (DeepSeek)
 
 The production query path is:
 
@@ -27,7 +28,7 @@ The production query path is:
 2. rewrite the query for lexical and semantic retrieval
 3. retrieve candidates with BM25
 4. retrieve candidates with dense pgvector search
-5. fuse candidates with weighted reciprocal-rank fusion
+5. fuse candidates with weighted reciprocal-rank fusion or normalized-score sum
 6. rerank the shortlist with the LLM (DeepSeek), when enabled
 
 ## Data
@@ -63,6 +64,24 @@ The course metrics used for quality are:
 The project also tracks hit rate, hard-negative hit rate, latency, hardware, HNSW
 index size, and embedding generation speed.
 
+### Iteration Comparison
+
+The project now has a reproducible two-iteration runner:
+
+- iteration 1: `intfloat/e5-small-v2`, BM25 + HNSW pgvector, RRF fusion
+- iteration 2: dynamic-quantized embedding inference, BM25 + HNSW pgvector,
+  `normalized_sum` fusion
+
+The runner records embedding refresh time, HNSW rebuild time, pgvector latency,
+document embedding inference latency, linked-validation quality, blind qrels
+quality, and vector-space analysis. Candidate iteration refreshes stored
+`structured_events.embedding` values so quality is measured against embeddings
+produced by the same configured encoder.
+
+```powershell
+py -m evaluation.compare_iterations --top-k 10 --embedding-sample-size 100
+```
+
 ### Blind Qrels Validation
 
 Full run on 150 blind queries with graded qrels. Hybrid includes LLM reranking
@@ -97,6 +116,10 @@ Measured on the blind validation set:
 | mean positive cosine | 0.879 |
 | mean hardest-negative cosine | 0.833 |
 | mean margin | 0.045 |
+
+`evaluation.embedding_analysis` also writes PCA and t-SNE 2D coordinates plus
+per-dimension variance/effective-rank statistics to
+`evaluation/embedding_analysis.json`.
 
 ### System Benchmark
 
@@ -177,6 +200,7 @@ docker compose --profile tools run --rm validate_linked
 docker compose --profile tools run --rm validate_qrels
 docker compose --profile tools run --rm embedding_analysis
 docker compose --profile tools run --rm benchmark_real
+docker compose --profile tools run --rm compare_iterations
 ```
 
 The API is available on `http://127.0.0.1:8000`.
@@ -193,11 +217,24 @@ $env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incide
 py -m data.embed_structured_events --limit 1000000
 ```
 
-To recompute existing embeddings after changing the model or dimension:
+To recompute existing embeddings after changing the model, quantization mode, or
+fusion experiment:
 
 ```powershell
-py -m data.embed_structured_events --refresh --limit 1000000
+py -m data.embed_structured_events --refresh --all
 ```
+
+Useful embedding and retrieval switches:
+
+```powershell
+$env:EMBEDDING_MODEL='intfloat/e5-small-v2'
+$env:EMBEDDING_QUANTIZATION='dynamic'
+$env:RETRIEVAL_FUSION_MODE='normalized_sum'
+```
+
+The current database schema stores 384-dimensional vectors. Use a replacement
+model with the same output dimension, or rebuild the database schema and index
+for a different dimension.
 
 If more raw news is imported, first extract more `structured_events`, then rerun
 the embedding command.
@@ -211,6 +248,7 @@ py -m evaluation.validate_qrels --top-k 10
 py -m evaluation.validate_retrieval --top-k 10
 py -m evaluation.embedding_analysis --backend auto
 py -m evaluation.benchmark_real --benchmark-document-embeddings --embedding-sample-size 100
+py -m evaluation.compare_iterations --top-k 10 --embedding-sample-size 100
 ```
 
 Saved reports are written under `evaluation/` and are exposed by `GET /metrics`.

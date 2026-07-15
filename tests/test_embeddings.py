@@ -7,6 +7,7 @@ from unittest.mock import patch
 from retrieval.embeddings import (
     HashingEmbeddingClient,
     SentenceTransformerEmbeddingClient,
+    build_embedding_client,
     build_document_text,
     build_query_text,
     validate_embedding_dimension,
@@ -36,6 +37,38 @@ class SentenceTransformerEmbeddingClientTests(unittest.TestCase):
             vector = client.embed_text(" incident log ")
 
         self.assertEqual([1.0, 2.0, 3.0], vector)
+
+    def test_dynamic_quantization_is_applied_when_requested(self) -> None:
+        fake_model = SimpleNamespace(
+            encode=lambda texts, **kwargs: [[0.1, 0.2, 0.3]],
+        )
+
+        with (
+            patch("retrieval.embeddings.SentenceTransformer", return_value=fake_model),
+            patch("retrieval.embeddings._apply_dynamic_quantization") as quantize,
+        ):
+            client = SentenceTransformerEmbeddingClient(model="test-model", quantization="dynamic")
+
+        quantize.assert_called_once_with(fake_model)
+        self.assertEqual("test-model@dynamic", client.model_name)
+
+    def test_build_client_passes_quantization_to_sentence_transformer(self) -> None:
+        fake_model = SimpleNamespace(
+            encode=lambda texts, **kwargs: [[0.1, 0.2, 0.3]],
+        )
+
+        with (
+            patch("retrieval.embeddings.SentenceTransformer", return_value=fake_model),
+            patch("retrieval.embeddings._apply_dynamic_quantization") as quantize,
+        ):
+            client = build_embedding_client(
+                backend="sentence-transformer",
+                model="test-model",
+                quantization="dynamic",
+            )
+
+        quantize.assert_called_once_with(fake_model)
+        self.assertEqual("test-model@dynamic", client.model_name)
 
     def test_hashing_fallback_respects_configured_dimension(self) -> None:
         client = HashingEmbeddingClient(dimensions=1024)

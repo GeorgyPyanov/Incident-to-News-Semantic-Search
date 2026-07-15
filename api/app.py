@@ -20,6 +20,7 @@ _METRIC_FILES = {
     "embedding_analysis": Path("evaluation/embedding_analysis.json"),
     "benchmark_search": Path("evaluation/benchmark_results.json"),
     "benchmark_real": Path("evaluation/benchmark_real_results.json"),
+    "iteration_comparison": Path("evaluation/iteration_comparison_results.json"),
 }
 
 
@@ -81,9 +82,13 @@ def _pipeline_summary() -> dict[str, Any]:
         "embeddings": {
             "backend": embedding_backend,
             "model": embedding_model,
+            "quantization": os.environ.get("EMBEDDING_QUANTIZATION", "none"),
             "dimensions": settings.embedding_dim,
             "query_prefix": os.environ.get("EMBEDDING_QUERY_PREFIX", "query: "),
             "document_prefix": os.environ.get("EMBEDDING_DOCUMENT_PREFIX", "passage: "),
+        },
+        "fusion": {
+            "mode": os.environ.get("RETRIEVAL_FUSION_MODE", "rrf"),
         },
         "reranker": {
             "provider": "DeepSeek",

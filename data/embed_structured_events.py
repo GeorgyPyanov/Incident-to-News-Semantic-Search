@@ -28,7 +28,6 @@ FROM structured_events se
 LEFT JOIN raw_news rn ON rn.id = se.raw_news_id
 WHERE (%(refresh)s OR se.embedding IS NULL)
 ORDER BY se.created_at
-LIMIT %(limit)s
 """
 
 UPDATE_SQL = """
@@ -40,16 +39,22 @@ WHERE id = %(event_id)s
 """
 
 
-def embed_structured_events(limit: int, refresh: bool = False) -> int:
+def embed_structured_events(limit: int | None = 1000, refresh: bool = False) -> int:
     updated = 0
     client = build_embedding_client(
         backend=os.getenv("EMBEDDING_BACKEND", "auto"),
         model=os.getenv("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
         dimensions=settings.embedding_dim,
+        quantization=os.getenv("EMBEDDING_QUANTIZATION", "none"),
     )
     with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
         with conn.cursor() as cur:
-            cur.execute(SELECT_SQL, {"limit": limit, "refresh": refresh})
+            sql = SELECT_SQL
+            params: dict[str, object] = {"refresh": refresh}
+            if limit is not None:
+                sql += "\nLIMIT %(limit)s"
+                params["limit"] = limit
+            cur.execute(sql, params)
             rows = cur.fetchall()
             for row in rows:
                 text = build_document_text(_event_text(row))
@@ -82,13 +87,15 @@ def _vector_literal(values: list[float]) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Embed structured_events with the configured local embedding model.")
     parser.add_argument("--limit", type=int, default=1000)
+    parser.add_argument("--all", action="store_true", help="Refresh all structured events instead of only a limited batch.")
     parser.add_argument("--refresh", action="store_true", help="Recompute existing embeddings instead of only filling NULLs.")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    print(f"structured_events_embedded: {embed_structured_events(args.limit, refresh=args.refresh)}")
+    limit = None if args.all else args.limit
+    print(f"structured_events_embedded: {embed_structured_events(limit, refresh=args.refresh)}")
 
 
 if __name__ == "__main__":

@@ -203,6 +203,7 @@ class DbNewsSearchService:
                 backend=os.getenv("EMBEDDING_BACKEND", "auto"),
                 model=os.getenv("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
                 dimensions=settings.embedding_dim,
+                quantization=os.getenv("EMBEDDING_QUANTIZATION", "none"),
             )
         return self._embedding_client
 

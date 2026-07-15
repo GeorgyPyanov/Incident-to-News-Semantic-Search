@@ -139,6 +139,30 @@ services:
         "100",
       ]
 
+  compare_iterations:
+    build:
+      context: .
+    profiles: ["tools"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/incident_news_search
+    volumes:
+      - hf_cache:/home/app/.cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      [
+        "python",
+        "-m",
+        "evaluation.compare_iterations",
+        "--top-k",
+        "10",
+        "--embedding-sample-size",
+        "100",
+      ]
+
 volumes:
   postgres_data:
   hf_cache:

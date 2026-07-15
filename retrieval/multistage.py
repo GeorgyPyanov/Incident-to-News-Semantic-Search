@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import math
 import re
 from dataclasses import dataclass
@@ -56,13 +57,13 @@ class QueryPlan:
 @dataclass(slots=True)
 class ScoredCandidate:
     hit: DbNewsHit
-    rrf_score: float
+    fusion_score: float
     heuristic_score: float
     llm_score: float = 0.0
 
     @property
     def final_score(self) -> float:
-        return (0.75 * self.rrf_score) + (0.20 * self.heuristic_score) + (0.05 * self.llm_score)
+        return (0.75 * self.fusion_score) + (0.20 * self.heuristic_score) + (0.05 * self.llm_score)
 
 
 class MultiStageNewsSearch:
@@ -71,10 +72,12 @@ class MultiStageNewsSearch:
         backend: NewsSearchBackend,
         extractor: IncidentExtractionService | None = None,
         reranker: DeepSeekReranker | None = None,
+        fusion_mode: str | None = None,
     ) -> None:
         self._backend = backend
         self._extractor = extractor or IncidentExtractionService()
         self._reranker = reranker or DeepSeekReranker()
+        self._fusion_mode = _normalize_fusion_mode(fusion_mode or os.getenv("RETRIEVAL_FUSION_MODE", "rrf"))
 
     def search(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
         top_k = max(1, min(top_k, 50))
@@ -88,15 +91,15 @@ class MultiStageNewsSearch:
             ("dense", self._backend.search_dense(plan.semantic_query, top_k=pool_size)),
         ]
 
-        fused = self._fuse_candidates(candidate_lists)
+        fused = self._fuse_candidates(candidate_lists, fusion_mode=self._fusion_mode)
         if not fused:
             return []
 
-        max_rrf = max(candidate.rrf_score for candidate in fused) or 1.0
-        shortlisted = sorted(fused, key=lambda candidate: candidate.rrf_score, reverse=True)[:shortlist_size]
+        max_fusion = max(candidate.fusion_score for candidate in fused) or 1.0
+        shortlisted = sorted(fused, key=lambda candidate: candidate.fusion_score, reverse=True)[:shortlist_size]
         llm_scores = self._reranker.rerank(plan.original_query, [candidate.hit for candidate in shortlisted])
         for candidate in fused:
-            candidate.rrf_score = candidate.rrf_score / max_rrf
+            candidate.fusion_score = candidate.fusion_score / max_fusion
             candidate.heuristic_score = self._heuristic_score(plan, candidate.hit)
             candidate.llm_score = llm_scores.get(candidate.hit.id, 0.0)
 
@@ -130,7 +133,13 @@ class MultiStageNewsSearch:
             identifier_hints=identifier_hints,
         )
 
-    def _fuse_candidates(self, candidate_lists: Sequence[tuple[str, Sequence[DbNewsHit]]], k: float = 60.0) -> list[ScoredCandidate]:
+    def _fuse_candidates(
+        self,
+        candidate_lists: Sequence[tuple[str, Sequence[DbNewsHit]]],
+        *,
+        fusion_mode: str,
+        k: float = 60.0,
+    ) -> list[ScoredCandidate]:
         stage_weights = {
             "bm25": 0.85,
             "bm25_rewrite": 0.80,
@@ -139,12 +148,16 @@ class MultiStageNewsSearch:
         by_id: dict[str, ScoredCandidate] = {}
         for stage_name, hits in candidate_lists:
             stage_weight = stage_weights.get(stage_name, 1.0)
+            normalized_scores = _normalize_stage_scores(hits)
             for hit in hits:
                 entry = by_id.get(hit.id)
                 if entry is None:
-                    entry = ScoredCandidate(hit=hit, rrf_score=0.0, heuristic_score=0.0)
+                    entry = ScoredCandidate(hit=hit, fusion_score=0.0, heuristic_score=0.0)
                     by_id[hit.id] = entry
-                entry.rrf_score += stage_weight / (k + hit.rank)
+                if fusion_mode == "normalized_sum":
+                    entry.fusion_score += stage_weight * normalized_scores.get(hit.id, 0.0)
+                else:
+                    entry.fusion_score += stage_weight / (k + hit.rank)
                 if hit.score > entry.hit.score:
                     entry.hit = hit
         return list(by_id.values())
@@ -236,3 +249,22 @@ def _identifiers(text: str) -> list[str]:
             seen.add(key)
             values.append(value)
     return values
+
+
+def _normalize_fusion_mode(value: str) -> str:
+    normalized = str(value or "rrf").strip().lower()
+    if normalized not in {"rrf", "normalized_sum"}:
+        raise ValueError(f"Unsupported fusion mode: {value!r}")
+    return normalized
+
+
+def _normalize_stage_scores(hits: Sequence[DbNewsHit]) -> dict[str, float]:
+    if not hits:
+        return {}
+    raw_scores = [float(hit.score or 0.0) for hit in hits]
+    minimum = min(raw_scores)
+    maximum = max(raw_scores)
+    if math.isclose(minimum, maximum):
+        return {hit.id: 1.0 for hit in hits}
+    span = maximum - minimum
+    return {hit.id: (float(hit.score or 0.0) - minimum) / span for hit in hits}

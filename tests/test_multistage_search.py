@@ -56,6 +56,17 @@ class MultiStageNewsSearchTests(unittest.TestCase):
         self.assertEqual("hybrid", results[0].method)
         self.assertGreater(results[0].score, results[1].score)
 
+    def test_normalized_sum_fusion_mode_is_available(self) -> None:
+        service = MultiStageNewsSearch(FakeBackend(), fusion_mode="normalized_sum")
+        results = service.search("2026-07-10 CloudPay payments-api timeout in us-east-1 caused 503 responses.", top_k=2)
+
+        self.assertEqual(2, len(results))
+        self.assertEqual("hybrid", results[0].method)
+
+    def test_rejects_unknown_fusion_mode(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Unsupported fusion mode"):
+            MultiStageNewsSearch(FakeBackend(), fusion_mode="unknown")
+
 
 if __name__ == "__main__":
     unittest.main()

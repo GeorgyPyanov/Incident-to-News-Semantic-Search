@@ -40,6 +40,7 @@ def cmd_embed_incident(args: argparse.Namespace) -> None:
         backend=os.getenv("EMBEDDING_BACKEND", "auto"),
         model=os.getenv("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
         dimensions=int(os.getenv("EMBEDDING_DIM", "384")),
+        quantization=os.getenv("EMBEDDING_QUANTIZATION", "none"),
     )
     incident = IncidentData(
         original_log=args.original_log,

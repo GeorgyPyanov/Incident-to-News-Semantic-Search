@@ -7,7 +7,7 @@ import math
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Protocol, Sequence
+from typing import Literal, Protocol, Sequence
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -25,11 +25,15 @@ class EmbeddingClient(Protocol):
         raise NotImplementedError
 
 
+EmbeddingQuantization = Literal["none", "dynamic"]
+
+
 @dataclass(slots=True)
 class SentenceTransformerEmbeddingClient:
     model: str = "intfloat/e5-small-v2"
     device: str | None = None
     normalize_embeddings: bool = True
+    quantization: EmbeddingQuantization = "none"
     _client: object = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -38,6 +42,11 @@ class SentenceTransformerEmbeddingClient:
                 "The 'sentence-transformers' package is required for SentenceTransformerEmbeddingClient."
             )
         self._client = SentenceTransformer(self.model, device=self.device)
+        self.quantization = _normalize_quantization(self.quantization)
+        if self.quantization == "dynamic":
+            if self.device not in (None, "cpu"):
+                raise ValueError("Dynamic quantization is only supported on CPU.")
+            _apply_dynamic_quantization(self._client)
 
     def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
         cleaned = [text.strip() for text in texts]
@@ -54,7 +63,9 @@ class SentenceTransformerEmbeddingClient:
 
     @property
     def model_name(self) -> str:
-        return self.model
+        if self.quantization == "none":
+            return self.model
+        return f"{self.model}@{self.quantization}"
 
 
 @dataclass(slots=True)
@@ -79,13 +90,18 @@ def build_embedding_client(
     model: str = "intfloat/e5-small-v2",
     dimensions: int = 384,
     device: str | None = None,
+    quantization: EmbeddingQuantization = "none",
 ) -> EmbeddingClient:
     backend_name = backend.strip().lower()
     if backend_name == "hashing":
         return HashingEmbeddingClient(dimensions=dimensions)
     if backend_name in {"sentence-transformer", "sentence_transformer", "sentence-transformers", "auto"}:
         try:
-            return SentenceTransformerEmbeddingClient(model=model, device=device)
+            return SentenceTransformerEmbeddingClient(
+                model=model,
+                device=device,
+                quantization=quantization,
+            )
         except Exception:
             if backend_name != "auto":
                 raise
@@ -120,6 +136,45 @@ def _with_prefix(text: str, prefix: str | None) -> str:
         suffix = normalized[len(prefix_text):].lstrip()
         return f"{prefix_text} {suffix}".rstrip() if suffix else prefix_text
     return f"{prefix_text} {normalized}"
+
+
+def _normalize_quantization(value: EmbeddingQuantization | str) -> EmbeddingQuantization:
+    normalized = str(value or "none").strip().lower()
+    if normalized not in {"none", "dynamic"}:
+        raise ValueError(f"Unsupported embedding quantization mode: {value!r}")
+    return normalized  # type: ignore[return-value]
+
+
+def _apply_dynamic_quantization(client: object) -> None:
+    try:
+        import torch
+    except ImportError as error:  # pragma: no cover - dependency error path
+        raise RuntimeError("Dynamic quantization requires torch.") from error
+
+    transformer_module = _first_transformer_module(client)
+    if transformer_module is None:
+        raise RuntimeError("SentenceTransformer model does not expose a quantizable transformer module.")
+
+    model = getattr(transformer_module, "auto_model", None) or getattr(transformer_module, "model", None)
+    if model is None:
+        raise RuntimeError("SentenceTransformer transformer module does not expose an underlying model.")
+
+    quantize_dynamic = getattr(getattr(getattr(torch, "ao", None), "quantization", None), "quantize_dynamic", None)
+    if quantize_dynamic is None:
+        quantize_dynamic = torch.quantization.quantize_dynamic
+
+    quantized_model = quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)
+    if hasattr(transformer_module, "auto_model"):
+        transformer_module.auto_model = quantized_model
+    else:
+        transformer_module.model = quantized_model
+
+
+def _first_transformer_module(client: object) -> object | None:
+    modules = getattr(client, "_modules", None)
+    if isinstance(modules, dict) and modules:
+        return next(iter(modules.values()))
+    return None
 
 
 TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_-]{2,}", re.IGNORECASE)

@@ -15,8 +15,7 @@ short operational log and needs external context quickly.
      OSV advisories, GitHub releases
 2. Extract rule-based `structured_events` from raw news.
 3. Embed structured events with the configured local encoder into `pgvector`.
-   The default learned model is `intfloat/e5-small-v2`; the deterministic
-   384-dimensional hashing vectorizer is only a CPU-safe fallback.
+   The default learned model is `intfloat/e5-small-v2`.
 4. Use the same encoder for query vectors, learned dense retrieval, pgvector
    retrieval, and embedding-space analysis; no cloud embedding API is required.
 5. Search through FastAPI endpoints:
@@ -25,6 +24,23 @@ short operational log and needs external context quickly.
    - `/search/pgvector`: explicit debug endpoint for the same ANN index path
    - `/search/hybrid`: multi-stage lexical + learned dense retrieval, weighted
      fusion, heuristic reranking, and optional LLM reranking (DeepSeek)
+
+## Model Choice
+
+`intfloat/e5-small-v2` is the default encoder because it gives a 384-dimensional
+vector that fits the current PostgreSQL/pgvector schema, supports the
+`query:`/`passage:` prompt convention used by the pipeline, and runs on CPU with
+acceptable latency for the project scale. The 384-dimensional output keeps the
+HNSW index small enough for local Docker evaluation while still giving much
+better validation quality than BM25-only retrieval.
+
+The second iteration keeps the same dimensionality and applies CPU dynamic
+quantization to embedding inference. This makes the comparison fair: both query
+and stored document embeddings can be produced by the same configured encoder
+without changing the vector schema. The runner also accepts another
+SentenceTransformer model through `--candidate-model`; if the replacement model
+has a different output dimension, rebuild the database with a matching
+`EMBEDDING_DIM` before refreshing embeddings.
 
 ## Dataset
 
@@ -106,6 +122,38 @@ similarity, hardest-negative similarity, margin, and separation rate on the
 blind validation set. It uses the same query/document prefixing as production
 retrieval, so the report reflects the deployed embedding space.
 
+The same step now writes PCA coordinates, t-SNE coordinates, per-dimension
+variance statistics, and effective rank to `evaluation/embedding_analysis.json`.
+
+### Iteration 6: Quantized Embeddings And Alternate Fusion
+
+Dynamic quantization was added to the SentenceTransformer embedding client. It
+uses PyTorch dynamic quantization over linear layers on CPU and is enabled with:
+
+```powershell
+$env:EMBEDDING_QUANTIZATION='dynamic'
+```
+
+The hybrid retriever also supports a second fusion strategy:
+
+```powershell
+$env:RETRIEVAL_FUSION_MODE='normalized_sum'
+```
+
+`rrf` remains the default. `normalized_sum` normalizes each stage's raw scores
+inside that stage and then applies stage weights, which provides a different
+fusion algorithm for the second iteration.
+
+The comparison runner executes:
+
+1. baseline: `intfloat/e5-small-v2` + BM25 + HNSW pgvector + RRF;
+2. candidate: dynamic-quantized encoder + BM25 + HNSW pgvector +
+   `normalized_sum` fusion.
+
+It records embedding refresh time, HNSW rebuild time, pgvector search latency,
+document embedding inference latency, linked quality, blind qrels quality, and
+PCA/t-SNE vector analysis.
+
 ## Evaluation
 
 Run:
@@ -116,6 +164,7 @@ py -m evaluation.validate_retrieval --top-k 10
 py -m evaluation.validate_qrels --top-k 10
 py -m evaluation.embedding_analysis --backend auto
 py -m evaluation.benchmark_real --benchmark-document-embeddings --embedding-sample-size 100
+py -m evaluation.compare_iterations --top-k 10 --embedding-sample-size 100
 ```
 
 Primary quality metrics:
@@ -132,6 +181,10 @@ System metrics:
 - p50 latency
 - p95 latency
 - average number of returned results
+- embedding refresh time
+- HNSW rebuild time
+- document embedding inference time
+- HNSW index size
 
 Current linked-validation summary:
 
@@ -175,6 +228,11 @@ Read-only document embedding benchmark:
 | mean per document | 97.5 ms |
 | p95 per document | 150.4 ms |
 
+The iteration comparison writes `evaluation/iteration_comparison_results.json`.
+The candidate run refreshes stored `structured_events.embedding` values before
+measuring quality, because pgvector quality must be measured against document
+vectors produced by the same encoder configuration as query vectors.
+
 ## Hardware Requirements
 
 Development and demo inference have been tested on a local laptop with Docker
@@ -188,6 +246,8 @@ LLM reranking (DeepSeek) is optional and only runs when explicitly enabled.
 ## Recommended Next Iteration
 
 - Refresh all `structured_events` embeddings after changing `EMBEDDING_MODEL`.
+- Run `evaluation.compare_iterations` after any model or fusion change and keep
+  the resulting JSON with the report.
 - Store chunk-level embeddings for long news bodies.
 - Add a cross-encoder or lightweight reranker for the top 20 hybrid candidates.
 - Add query rewriting/HyDE for short logs that lack provider-specific terms.
