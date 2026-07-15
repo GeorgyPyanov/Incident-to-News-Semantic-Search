@@ -14,7 +14,7 @@ from database.bootstrap import apply_schema
 from event_extraction.formatting import build_incident_embedding_text, build_incident_search_text
 from event_extraction.schemas import IncidentData
 from .benchmark import compare_dense_strategies, run_dense_benchmark
-from .embeddings import OpenAIEmbeddingClient
+from .embeddings import build_embedding_client
 from .sql import dense_search_sql, full_text_search_sql
 
 
@@ -36,7 +36,11 @@ def cmd_init_db(args: argparse.Namespace) -> None:
 
 
 def cmd_embed_incident(args: argparse.Namespace) -> None:
-    client = OpenAIEmbeddingClient(api_key=os.getenv("OPENAI_API_KEY"))
+    client = build_embedding_client(
+        backend=os.getenv("EMBEDDING_BACKEND", "auto"),
+        model=os.getenv("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
+        dimensions=int(os.getenv("EMBEDDING_DIM", "384")),
+    )
     incident = IncidentData(
         original_log=args.original_log,
         entities=tuple(args.entities or ()),

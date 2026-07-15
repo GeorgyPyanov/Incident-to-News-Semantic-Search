@@ -12,6 +12,7 @@ import os
 import re
 import statistics
 import time
+from functools import lru_cache
 from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -334,10 +335,13 @@ def default_document_embedder(row: dict[str, Any], dimension: int) -> list[float
     # These are deliberately the exact production text preparation and
     # embedding functions used by data.embed_structured_events.
     try:
-        from data.embed_structured_events import _event_text, _hashed_vector
+        from data.embed_structured_events import _event_text
+        from retrieval.embeddings import build_document_text, validate_embedding_dimension
     except ImportError as error:
         raise RuntimeError("Document embedding benchmarking requires requirements.txt") from error
-    return _hashed_vector(_event_text(row), dimension)
+    vector = _benchmark_embedding_client(dimension).embed_text(build_document_text(_event_text(row)))
+    validate_embedding_dimension(vector, dimension, _benchmark_embedding_client(dimension).model_name)
+    return vector
 
 
 def benchmark_document_sample(
@@ -368,7 +372,7 @@ def benchmark_document_sample(
 
     return {
         "provider": "local",
-        "model": f"hashing-vectorizer-{dimension}",
+        "model": _benchmark_embedding_client(dimension).model_name,
         "vector_dimension": dimension,
         "sample_size": len(sample),
         "batch_size": EMBEDDING_BATCH_SIZE,
@@ -388,7 +392,8 @@ def benchmark_document_sample(
         "index_modified": False,
         "source_functions": [
             "data.embed_structured_events._event_text",
-            "data.embed_structured_events._hashed_vector",
+            "retrieval.embeddings.build_document_text",
+            "retrieval.embeddings.build_embedding_client",
         ],
     }
 
@@ -483,12 +488,15 @@ def default_connection_factory() -> Any:
 def default_query_embedder(query: str, dimension: int) -> str:
     # Import lazily so schema-only tests do not require database dependencies.
     try:
-        from retrieval.db_search import _hashed_dense_vector, _vector_literal
+        from retrieval.embeddings import build_query_text, validate_embedding_dimension
         from retrieval.query_rewrite import rewrite_incident_query
+        from retrieval.db_search import _vector_literal
     except ImportError as error:
         raise RuntimeError("Real benchmarking requires the dependencies in requirements.txt") from error
 
-    return _vector_literal(_hashed_dense_vector(rewrite_incident_query(query), dimensions=dimension))
+    vector = _benchmark_embedding_client(dimension).embed_text(build_query_text(rewrite_incident_query(query)))
+    validate_embedding_dimension(vector, dimension, _benchmark_embedding_client(dimension).model_name)
+    return _vector_literal(vector)
 
 
 def default_embedding_generator(limit: int) -> int:
@@ -498,6 +506,20 @@ def default_embedding_generator(limit: int) -> int:
         raise RuntimeError("Embedding generation requires the dependencies in requirements.txt") from error
 
     return embed_structured_events(limit)
+
+
+@lru_cache(maxsize=None)
+def _benchmark_embedding_client(dimension: int):
+    try:
+        from retrieval.embeddings import build_embedding_client
+    except ImportError as error:
+        raise RuntimeError("Real benchmarking requires the dependencies in requirements.txt") from error
+
+    return build_embedding_client(
+        backend=os.environ.get("EMBEDDING_BACKEND", "auto"),
+        model=os.environ.get("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
+        dimensions=dimension,
+    )
 
 
 def default_search_sql() -> str:
@@ -594,7 +616,7 @@ def _numeric_value(value: str) -> int | float | str:
 
 
 def _configured_dimension() -> int:
-    return int(os.environ.get("EMBEDDING_DIM", "1024"))
+    return int(os.environ.get("EMBEDDING_DIM", "384"))
 
 
 def _percentile(ordered: Sequence[float], fraction: float) -> float:

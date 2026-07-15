@@ -18,34 +18,35 @@ relevance signal:
 
 Current database state:
 
-- `raw_news`: 344 449 rows
-- `raw_logs`: 9 210 rows
-- total selected objects: 353 701 rows
+- `raw_news`: 518 768 rows
+- `raw_logs`: 9 718 rows
+- selected raw objects: 528 486 rows
+- total database objects: 528 739 rows
 
 Current `raw_news` sources:
 
-- `gdeltv2_event`: 335 844
-- `hackernews_story`: 3 147
-- `google_news_story`: 2 212
-- `osv_advisory`: 860
-- `statuspage_incident`: 1 977
+- `gdeltv2_event`: 509 118
+- `hackernews_story`: 3 177
+- `google_news_story`: 3 095
+- `osv_advisory`: 880
+- `statuspage_incident`: 2 089
 - `github_release`: 409
 
 Current `raw_logs` sources:
 
-- `statuspage_incidents`: 7 882
-- `osv_advisories`: 860
-- `gharchive_open_source`: 468
+- `statuspage_incidents`: 8 345
+- `osv_advisories`: 880
+- `gharchive_open_source`: 493
 
 Relevance checks:
 
-- 7 882 status update logs have direct linked incident reports.
-- 5 805 status update logs have Hacker News provider/time candidates.
-- 3 938 status update logs have Google News provider/time candidates.
+- 8 345 status update logs have direct linked incident reports.
+- 6 249 status update logs have Hacker News provider/time candidates.
+- 4 365 status update logs have Google News provider/time candidates.
 - GDELT provider/time matching is available as a broad candidate-pool check,
   but it is intentionally not the primary relevance metric.
 - 417 GitHub activity logs have matching GitHub release rows.
-- 860 OSV package events have direct linked OSV advisories.
+- 880 OSV package events have direct linked OSV advisories.
 
 ## Source Classes
 

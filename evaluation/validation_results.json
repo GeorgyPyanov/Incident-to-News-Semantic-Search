@@ -3,22 +3,22 @@
   "top_k": 10,
   "modes": {
     "bm25": {
-      "hit_at_k": 0.66,
-      "mrr_at_k": 0.6020634920634921,
-      "recall_at_k": 0.66,
-      "ndcg_at_k": 0.6168170471362784,
-      "hits": 99,
+      "hit_at_k": 0.56,
+      "mrr_at_k": 0.5,
+      "recall_at_k": 0.56,
+      "ndcg_at_k": 0.515467689937866,
+      "hits": 84,
       "negative_hit_at_k": 0.0,
       "latency_ms": {
-        "mean": 783.4947420004755,
-        "p50": 60.73080003261566,
-        "p95": 2559.3460999662057
+        "mean": 836.8996466649696,
+        "p50": 58.992200007196516,
+        "p95": 2422.4424000130966
       },
       "per_dataset": {
         "statuspage_incidents": {
           "examples": 50,
-          "hits": 46,
-          "hit_at_k": 0.92
+          "hits": 33,
+          "hit_at_k": 0.66
         },
         "osv_advisories": {
           "examples": 50,
@@ -27,94 +27,94 @@
         },
         "gharchive_open_source": {
           "examples": 50,
-          "hits": 3,
-          "hit_at_k": 0.06
+          "hits": 1,
+          "hit_at_k": 0.02
         }
       },
       "sample_misses": [
         {
-          "example_id": "statuspage_incidents:f69b3770-5fe4-4eaf-bb0d-5366a21efab3:7f59cd0f-94ae-49ba-aad4-df6e58ff9017",
+          "example_id": "statuspage_incidents:1f089513-dbdb-4e63-b2b4-93f2c0ed8b27:cbaca780-fc74-4023-9645-45a147ee4b41",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "cbaca780-fc74-4023-9645-45a147ee4b41"
+          ]
+        },
+        {
+          "example_id": "statuspage_incidents:4f0aeecb-5030-438c-9425-30274098d2ce:66988122-59a1-4a2c-9599-c3c35880c040",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "66988122-59a1-4a2c-9599-c3c35880c040"
+          ]
+        },
+        {
+          "example_id": "statuspage_incidents:23a83dfd-fa65-41c9-8b3b-18aa256f4f96:66988122-59a1-4a2c-9599-c3c35880c040",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "66988122-59a1-4a2c-9599-c3c35880c040"
+          ]
+        },
+        {
+          "example_id": "statuspage_incidents:9cec0b82-c2f4-469f-9453-9be0b1f27cea:66988122-59a1-4a2c-9599-c3c35880c040",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "66988122-59a1-4a2c-9599-c3c35880c040"
+          ]
+        },
+        {
+          "example_id": "statuspage_incidents:61da50fa-fdc5-4bcb-9409-a4f067511ac7:81c4d3f4-7b71-4709-a0fd-e6d0b2857971",
+          "dataset": "statuspage_incidents",
+          "relevant_news_ids": [
+            "81c4d3f4-7b71-4709-a0fd-e6d0b2857971"
+          ]
+        },
+        {
+          "example_id": "statuspage_incidents:3216cf50-20cb-404d-84d3-e7cb14225033:7f59cd0f-94ae-49ba-aad4-df6e58ff9017",
           "dataset": "statuspage_incidents",
           "relevant_news_ids": [
             "7f59cd0f-94ae-49ba-aad4-df6e58ff9017"
           ]
         },
         {
-          "example_id": "statuspage_incidents:75eef99e-3853-40b9-a00a-93b16c982c01:ce2292f4-7500-4268-a36c-b128eb0c9c52",
+          "example_id": "statuspage_incidents:6467292d-f1ad-4b2c-9113-e280d33da935:7f59cd0f-94ae-49ba-aad4-df6e58ff9017",
           "dataset": "statuspage_incidents",
           "relevant_news_ids": [
-            "ce2292f4-7500-4268-a36c-b128eb0c9c52"
+            "7f59cd0f-94ae-49ba-aad4-df6e58ff9017"
           ]
         },
         {
-          "example_id": "statuspage_incidents:8247b776-3e88-4e95-adc3-2ad561067393:ce2292f4-7500-4268-a36c-b128eb0c9c52",
+          "example_id": "statuspage_incidents:c19bf6fe-54b6-459f-b6e5-8de7cd2fefca:615e1086-1d13-40f3-9183-edd1dfa359a1",
           "dataset": "statuspage_incidents",
           "relevant_news_ids": [
-            "ce2292f4-7500-4268-a36c-b128eb0c9c52"
+            "615e1086-1d13-40f3-9183-edd1dfa359a1"
           ]
         },
         {
-          "example_id": "statuspage_incidents:8a272e49-b2c3-4a93-8f02-04cef31f814b:a344161f-ca25-4133-837b-65076dac3bfe",
+          "example_id": "statuspage_incidents:62e360f3-215a-4e3a-acc7-ad4fd560e917:7f59cd0f-94ae-49ba-aad4-df6e58ff9017",
           "dataset": "statuspage_incidents",
           "relevant_news_ids": [
-            "a344161f-ca25-4133-837b-65076dac3bfe"
+            "7f59cd0f-94ae-49ba-aad4-df6e58ff9017"
           ]
         },
         {
-          "example_id": "gharchive_open_source:e1198924-7046-43c8-a97b-b44359f72af5:1e4e76ad-60e8-41d3-84df-56973e002e54",
-          "dataset": "gharchive_open_source",
+          "example_id": "statuspage_incidents:44441bf2-8947-4e4d-ae84-3fce1b249b49:7f59cd0f-94ae-49ba-aad4-df6e58ff9017",
+          "dataset": "statuspage_incidents",
           "relevant_news_ids": [
-            "1e4e76ad-60e8-41d3-84df-56973e002e54"
-          ]
-        },
-        {
-          "example_id": "gharchive_open_source:b323ef88-25c4-49a3-8b85-993bb7434b66:9321d768-4225-4ab2-8d28-c32da4955f7d",
-          "dataset": "gharchive_open_source",
-          "relevant_news_ids": [
-            "9321d768-4225-4ab2-8d28-c32da4955f7d"
-          ]
-        },
-        {
-          "example_id": "gharchive_open_source:809eb9d7-e72c-4eba-be8e-c18624ce1461:289817b7-ad4c-47bc-8af7-77a21c577d69",
-          "dataset": "gharchive_open_source",
-          "relevant_news_ids": [
-            "289817b7-ad4c-47bc-8af7-77a21c577d69"
-          ]
-        },
-        {
-          "example_id": "gharchive_open_source:e17fbf49-08a0-43bd-b26b-73033dafbc84:bb4e3602-57b7-469f-8764-123aadb57229",
-          "dataset": "gharchive_open_source",
-          "relevant_news_ids": [
-            "bb4e3602-57b7-469f-8764-123aadb57229"
-          ]
-        },
-        {
-          "example_id": "gharchive_open_source:69f43e27-75fc-496e-be1e-64d6e71015a4:b5812233-6fb3-403d-8ba3-e07cb85d8e5f",
-          "dataset": "gharchive_open_source",
-          "relevant_news_ids": [
-            "b5812233-6fb3-403d-8ba3-e07cb85d8e5f"
-          ]
-        },
-        {
-          "example_id": "gharchive_open_source:cd0e9c74-b594-4c54-8d87-649d0863d684:fb687aaa-aeeb-4904-a064-f905b89390b3",
-          "dataset": "gharchive_open_source",
-          "relevant_news_ids": [
-            "fb687aaa-aeeb-4904-a064-f905b89390b3"
+            "7f59cd0f-94ae-49ba-aad4-df6e58ff9017"
           ]
         }
       ]
     },
     "dense": {
       "hit_at_k": 1.0,
-      "mrr_at_k": 0.9546666666666666,
+      "mrr_at_k": 0.9472222222222223,
       "recall_at_k": 1.0,
-      "ndcg_at_k": 0.9663867323339468,
+      "ndcg_at_k": 0.9608850890300157,
       "hits": 150,
-      "negative_hit_at_k": 0.0,
+      "negative_hit_at_k": 0.58,
       "latency_ms": {
-        "mean": 1399.531589334365,
-        "p50": 741.1356000229716,
-        "p95": 3595.0723999994807
+        "mean": 151.75878466456197,
+        "p50": 95.97419999772683,
+        "p95": 168.40240004239604
       },
       "per_dataset": {
         "statuspage_incidents": {
@@ -136,27 +136,27 @@
       "sample_misses": []
     },
     "pgvector": {
-      "hit_at_k": 0.9866666666666667,
-      "mrr_at_k": 0.9465079365079365,
-      "recall_at_k": 0.9866666666666667,
-      "ndcg_at_k": 0.9565350998060592,
-      "hits": 148,
-      "negative_hit_at_k": 0.52,
+      "hit_at_k": 1.0,
+      "mrr_at_k": 0.9472222222222223,
+      "recall_at_k": 1.0,
+      "ndcg_at_k": 0.9608850890300157,
+      "hits": 150,
+      "negative_hit_at_k": 0.58,
       "latency_ms": {
-        "mean": 53.917070666793734,
-        "p50": 52.38670000107959,
-        "p95": 75.13750001089647
+        "mean": 33.303494663365804,
+        "p50": 30.20109998760745,
+        "p95": 46.81880003772676
       },
       "per_dataset": {
         "statuspage_incidents": {
           "examples": 50,
-          "hits": 49,
-          "hit_at_k": 0.98
+          "hits": 50,
+          "hit_at_k": 1.0
         },
         "osv_advisories": {
           "examples": 50,
-          "hits": 49,
-          "hit_at_k": 0.98
+          "hits": 50,
+          "hit_at_k": 1.0
         },
         "gharchive_open_source": {
           "examples": 50,
@@ -164,34 +164,19 @@
           "hit_at_k": 1.0
         }
       },
-      "sample_misses": [
-        {
-          "example_id": "statuspage_incidents:c19bf6fe-54b6-459f-b6e5-8de7cd2fefca:615e1086-1d13-40f3-9183-edd1dfa359a1",
-          "dataset": "statuspage_incidents",
-          "relevant_news_ids": [
-            "615e1086-1d13-40f3-9183-edd1dfa359a1"
-          ]
-        },
-        {
-          "example_id": "osv_advisories:8b70f8de-a723-4c01-8825-72cd74904e2f:d1969e0b-3318-4f98-8c50-258791f6a2c8",
-          "dataset": "osv_advisories",
-          "relevant_news_ids": [
-            "d1969e0b-3318-4f98-8c50-258791f6a2c8"
-          ]
-        }
-      ]
+      "sample_misses": []
     },
     "hybrid": {
       "hit_at_k": 1.0,
-      "mrr_at_k": 0.9633333333333334,
+      "mrr_at_k": 0.98,
       "recall_at_k": 1.0,
-      "ndcg_at_k": 0.9729348485952403,
+      "ndcg_at_k": 0.9852371901428583,
       "hits": 150,
-      "negative_hit_at_k": 0.4866666666666667,
+      "negative_hit_at_k": 0.58,
       "latency_ms": {
-        "mean": 2237.100595999897,
-        "p50": 2991.6607999475673,
-        "p95": 3987.6634000684135
+        "mean": 7937.393424665012,
+        "p50": 7908.038399997167,
+        "p95": 10903.157799970359
       },
       "per_dataset": {
         "statuspage_incidents": {

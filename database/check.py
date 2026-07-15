@@ -1,3 +1,5 @@
+import argparse
+
 import psycopg
 
 from database.migrate import _postgres_url
@@ -15,7 +17,7 @@ COUNT_QUERIES = {
 }
 
 
-def check_database() -> None:
+def check_database(min_total: int = 50_000) -> None:
     with psycopg.connect(_postgres_url(settings.database_url)) as conn:
         total_objects = 0
         with conn.cursor() as cur:
@@ -25,9 +27,16 @@ def check_database() -> None:
                 total_objects += value
                 print(f"{table_name}: {value}")
         print(f"total_objects: {total_objects}")
-        if total_objects < 50_000:
-            raise SystemExit("Database has fewer than 50 000 objects.")
+        if total_objects < min_total:
+            raise SystemExit(f"Database has fewer than {min_total} objects.")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Check loaded database coverage.")
+    parser.add_argument("--min-total", type=int, default=50_000)
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    check_database()
+    args = parse_args()
+    check_database(args.min_total)

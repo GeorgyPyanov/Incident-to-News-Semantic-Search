@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import hashlib
-import math
+import os
 import re
 from dataclasses import dataclass
 from typing import Literal
@@ -20,6 +19,11 @@ except ImportError:  # pragma: no cover - exercised when optional DB deps are un
         return database_url
 
 from database.settings import settings
+from retrieval.embeddings import (
+    build_embedding_client,
+    build_query_text,
+    validate_embedding_dimension,
+)
 from retrieval.query_rewrite import rewrite_incident_query
 
 
@@ -77,65 +81,6 @@ LIMIT %(limit)s
 """
 
 
-CANDIDATE_SQL = """
-WITH q AS (
-    SELECT plainto_tsquery('english', %(query)s) AS query
-)
-SELECT
-    rn.id::text AS id,
-    rn.title,
-    rn.url,
-    rn.source,
-    rn.source_type,
-    rn.published_at,
-    rn.body,
-    rn.raw_payload,
-    left(coalesce(rn.body, rn.title), 240) AS snippet,
-    ts_rank_cd(
-        to_tsvector(
-            'english',
-            coalesce(rn.source, '') || ' ' ||
-            coalesce(rn.title, '') || ' ' ||
-            coalesce(rn.body, '') || ' ' ||
-            rn.raw_payload::text
-        ),
-        q.query
-    ) AS lexical_score
-FROM raw_news rn, q
-WHERE to_tsvector(
-    'english',
-    coalesce(rn.source, '') || ' ' ||
-    coalesce(rn.title, '') || ' ' ||
-    coalesce(rn.body, '') || ' ' ||
-    rn.raw_payload::text
-) @@ q.query
-ORDER BY lexical_score DESC, rn.published_at DESC NULLS LAST
-LIMIT %(limit)s
-"""
-
-
-FALLBACK_CANDIDATE_SQL = """
-SELECT
-    rn.id::text AS id,
-    rn.title,
-    rn.url,
-    rn.source,
-    rn.source_type,
-    rn.published_at,
-    rn.body,
-    rn.raw_payload,
-    left(coalesce(rn.body, rn.title), 240) AS snippet,
-    0.0 AS lexical_score
-FROM raw_news rn
-WHERE rn.title ILIKE %(pattern)s
-   OR rn.body ILIKE %(pattern)s
-   OR rn.source ILIKE %(pattern)s
-   OR rn.raw_payload::text ILIKE %(pattern)s
-ORDER BY rn.published_at DESC NULLS LAST
-LIMIT %(limit)s
-"""
-
-
 IDENTIFIER_CANDIDATE_SQL = """
 SELECT
     rn.id::text AS id,
@@ -182,6 +127,11 @@ LIMIT %(limit)s
 
 
 class DbNewsSearchService:
+    def __init__(self) -> None:
+        self._embedding_client = None
+        self._query_embedding_cache: dict[str, list[float]] = {}
+        self._migrations_applied = False
+
     def search(self, query: str, mode: SearchMode, top_k: int = 10) -> list[DbNewsHit]:
         top_k = max(1, min(top_k, 50))
         if mode == "bm25":
@@ -195,84 +145,43 @@ class DbNewsSearchService:
     def search_bm25(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
         if psycopg is None or dict_row is None:
             raise RuntimeError("Database search requires the optional psycopg dependency.")
+        self._ensure_migrations()
+        expanded_query = _expanded_query(query)
         with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 rows_by_id: dict[str, dict] = {}
                 for row in self._identifier_rows(cur, query, limit=top_k):
                     rows_by_id[row["id"]] = {**row, "score": 10.0}
-                cur.execute(BM25_SQL, {"query": query, "limit": top_k})
+                cur.execute(BM25_SQL, {"query": expanded_query, "limit": top_k})
                 for row in cur.fetchall():
                     rows_by_id.setdefault(row["id"], row)
         rows = sorted(rows_by_id.values(), key=lambda row: float(row.get("score") or 0.0), reverse=True)[:top_k]
         return [_row_to_hit(row, rank, "bm25") for rank, row in enumerate(rows, start=1)]
 
     def search_dense(self, query: str, top_k: int = 10, pool_size: int = 200) -> list[DbNewsHit]:
-        candidates = self._candidate_rows(query, pool_size)
-        query_vec = _hashed_embedding(rewrite_incident_query(query))
-        scored = []
-        for row in candidates:
-            text = " ".join(
-                str(row.get(key) or "") for key in ("source", "source_type", "title", "body", "raw_payload")
-            )
-            score = _cosine(query_vec, _hashed_embedding(text))
-            scored.append((score, row))
-        scored.sort(key=lambda item: item[0], reverse=True)
-        return [
-            _row_to_hit({**row, "score": score}, rank, "dense")
-            for rank, (score, row) in enumerate(scored[:top_k], start=1)
-        ]
+        return self._search_pgvector(query, top_k=top_k, method="dense")
 
     def search_pgvector(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
+        return self._search_pgvector(query, top_k=top_k, method="pgvector")
+
+    def _search_pgvector(self, query: str, top_k: int, method: SearchMode) -> list[DbNewsHit]:
         if psycopg is None or dict_row is None:
             raise RuntimeError("Database search requires the optional psycopg dependency.")
-        embedding = _vector_literal(_hashed_dense_vector(rewrite_incident_query(query), dimensions=settings.embedding_dim))
+        self._ensure_migrations()
+        client = self._get_embedding_client()
+        vector = self._query_vector(query)
+        embedding = _vector_literal(vector)
         with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
             with conn.cursor() as cur:
                 cur.execute(PGVECTOR_SQL, {"embedding": embedding, "limit": top_k})
                 rows = cur.fetchall()
-        return [_row_to_hit(row, rank, "pgvector") for rank, row in enumerate(rows, start=1)]
+        return [_row_to_hit(row, rank, method) for rank, row in enumerate(rows, start=1)]
 
     def search_hybrid(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
-        bm25 = self.search_bm25(query, top_k=50)
-        dense = self.search_dense(query, top_k=50)
-        pgvector = self.search_pgvector(query, top_k=50)
-        by_id: dict[str, DbNewsHit] = {}
-        scores: dict[str, float] = {}
-        for hits in (bm25, dense, pgvector):
-            for hit in hits:
-                by_id.setdefault(hit.id, hit)
-                scores[hit.id] = scores.get(hit.id, 0.0) + 1.0 / (60 + hit.rank)
-        ranked_ids = sorted(scores, key=lambda item_id: scores[item_id], reverse=True)[:top_k]
-        return [
-            DbNewsHit(
-                **{
-                    **by_id[item_id].__dict__,
-                    "score": scores[item_id],
-                    "rank": rank,
-                    "method": "hybrid",
-                }
-            )
-            for rank, item_id in enumerate(ranked_ids, start=1)
-        ]
+        from retrieval.multistage import MultiStageNewsSearch
 
-    def _candidate_rows(self, query: str, limit: int) -> list[dict]:
-        if psycopg is None or dict_row is None:
-            raise RuntimeError("Database search requires the optional psycopg dependency.")
-        with psycopg.connect(_postgres_url(settings.database_url), row_factory=dict_row) as conn:
-            with conn.cursor() as cur:
-                rows_by_id: dict[str, dict] = {}
-                for row in self._identifier_rows(cur, query, limit):
-                    rows_by_id.setdefault(row["id"], row)
-                cur.execute(CANDIDATE_SQL, {"query": query, "limit": limit})
-                for row in cur.fetchall():
-                    rows_by_id.setdefault(row["id"], row)
-                rows = list(rows_by_id.values())
-                if rows:
-                    return rows[:limit]
-                tokens = _tokens(query)
-                pattern = f"%{tokens[0]}%" if tokens else "%"
-                cur.execute(FALLBACK_CANDIDATE_SQL, {"pattern": pattern, "limit": limit})
-                return list(cur.fetchall())
+        self._ensure_migrations()
+        return MultiStageNewsSearch(self).search(query, top_k=top_k)
 
     def _identifier_rows(self, cur, query: str, limit: int) -> list[dict]:
         rows: list[dict] = []
@@ -287,6 +196,33 @@ class DbNewsSearchService:
                     seen.add(row["id"])
                     rows.append(row)
         return rows
+
+    def _get_embedding_client(self):
+        if self._embedding_client is None:
+            self._embedding_client = build_embedding_client(
+                backend=os.getenv("EMBEDDING_BACKEND", "auto"),
+                model=os.getenv("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
+                dimensions=settings.embedding_dim,
+            )
+        return self._embedding_client
+
+    def _query_vector(self, query: str) -> list[float]:
+        cached = self._query_embedding_cache.get(query)
+        if cached is not None:
+            return cached
+        client = self._get_embedding_client()
+        vector = client.embed_text(build_query_text(rewrite_incident_query(query)))
+        validate_embedding_dimension(vector, settings.embedding_dim, client.model_name)
+        self._query_embedding_cache[query] = vector
+        return vector
+
+    def _ensure_migrations(self) -> None:
+        if self._migrations_applied:
+            return
+        from database.migrate import apply_migrations
+
+        apply_migrations()
+        self._migrations_applied = True
 
 
 def _row_to_hit(row: dict, rank: int, method: SearchMode) -> DbNewsHit:
@@ -309,6 +245,15 @@ def _tokens(text: str) -> list[str]:
     return [match.group(0).lower() for match in TOKEN_RE.finditer(text or "")]
 
 
+def _expanded_query(query: str) -> str:
+    rewritten = rewrite_incident_query(query)
+    if not rewritten.strip():
+        return query
+    if rewritten.strip().lower() == query.strip().lower():
+        return query
+    return f"{query} {rewritten}"
+
+
 def _identifiers(text: str) -> list[str]:
     seen: set[str] = set()
     values: list[str] = []
@@ -321,31 +266,5 @@ def _identifiers(text: str) -> list[str]:
     return values
 
 
-def _hashed_embedding(text: str, dimensions: int = 256) -> dict[int, float]:
-    vector: dict[int, float] = {}
-    for token in _tokens(text):
-        digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
-        bucket = int.from_bytes(digest[:4], "big") % dimensions
-        sign = 1.0 if digest[4] % 2 == 0 else -1.0
-        vector[bucket] = vector.get(bucket, 0.0) + sign
-    norm = math.sqrt(sum(value * value for value in vector.values()))
-    if not norm:
-        return vector
-    return {key: value / norm for key, value in vector.items()}
-
-
-def _hashed_dense_vector(text: str, dimensions: int) -> list[float]:
-    sparse = _hashed_embedding(text, dimensions=dimensions)
-    return [sparse.get(index, 0.0) for index in range(dimensions)]
-
-
 def _vector_literal(values: list[float]) -> str:
     return "[" + ",".join(f"{value:.8f}" for value in values) + "]"
-
-
-def _cosine(left: dict[int, float], right: dict[int, float]) -> float:
-    if not left or not right:
-        return 0.0
-    if len(left) > len(right):
-        left, right = right, left
-    return sum(value * right.get(key, 0.0) for key, value in left.items())

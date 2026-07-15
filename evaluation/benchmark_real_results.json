@@ -1,17 +1,17 @@
 {
   "benchmark_type": "real_postgresql_pgvector",
-  "timestamp": "2026-07-14T09:55:01.379529+00:00",
+  "timestamp": "2026-07-15T00:13:22.957399+00:00",
   "platform": {
     "system": "Windows",
-    "release": "11",
+    "release": "10",
     "machine": "AMD64",
-    "python_version": "3.14.6",
+    "python_version": "3.11.2",
     "cpu": {
-      "model": "13th Gen Intel(R) Core(TM) i5-1335U",
+      "model": "AMD Ryzen 5 5600H with Radeon Graphics",
       "logical_cores": 12,
-      "physical_cores": 10
+      "physical_cores": 6
     },
-    "total_ram_bytes": 16847880192,
+    "total_ram_bytes": 16487870464,
     "gpu": {
       "model": "No GPU",
       "vram_bytes": null
@@ -29,11 +29,11 @@
   },
   "embedding": {
     "provider": "local",
-    "model": "hashing-vectorizer-1024",
+    "model": "intfloat/e5-small-v2",
     "models_present": [
-      "hashing-vectorizer-1024"
+      "intfloat/e5-small-v2"
     ],
-    "vector_dimension": 1024,
+    "vector_dimension": 384,
     "embedded_documents": 211,
     "total_documents": 211,
     "requested": false,
@@ -53,8 +53,8 @@
       "partial_predicate": "embedding IS NOT NULL"
     },
     "definition": "CREATE INDEX ix_structured_events_embedding ON public.structured_events USING hnsw (embedding vector_cosine_ops) WITH (m='16', ef_construction='64') WHERE (embedding IS NOT NULL)",
-    "size_on_disk_bytes": 1736704,
-    "total_size_on_disk_bytes": 1736704,
+    "size_on_disk_bytes": 442368,
+    "total_size_on_disk_bytes": 442368,
     "rebuild_requested": false,
     "build_time_seconds": null
   },
@@ -64,26 +64,26 @@
     "measured_searches": 100,
     "clock": "time.perf_counter",
     "query_embedding_latency_ms": {
-      "mean": 0.2792759845033288,
-      "median": 0.2609000075608492,
-      "p95": 0.31915975268930197,
-      "min": 0.21639978513121605,
-      "max": 1.2483997270464897
+      "mean": 26.690495999646373,
+      "median": 26.4531499997247,
+      "p95": 31.902505029574968,
+      "min": 20.25780000258237,
+      "max": 36.53489996213466
     },
     "provider_api_latency_ms": null,
     "database_index_search_latency_ms": {
-      "mean": 1.297309990040958,
-      "median": 1.1855498887598515,
-      "p95": 2.0563999423757195,
-      "min": 0.9361999109387398,
-      "max": 3.3428999595344067
+      "mean": 2.513531999429688,
+      "median": 2.449649997288361,
+      "p95": 2.8366100013954565,
+      "min": 2.0827000262215734,
+      "max": 5.623400036711246
     },
     "end_to_end_retrieval_latency_ms": {
-      "mean": 1.57748703379184,
-      "median": 1.4543503057211637,
-      "p95": 2.4003203026950355,
-      "min": 1.1877999641001225,
-      "max": 3.6168000660836697
+      "mean": 29.206604002974927,
+      "median": 28.926450002472848,
+      "p95": 34.37003999133594,
+      "min": 22.49079995090142,
+      "max": 39.09500001464039
     }
   },
   "explain_analyze": {
@@ -101,34 +101,34 @@
       "raw_news_pkey"
     ],
     "sequential_scan_tables": [],
-    "planning_time_ms": 0.12,
-    "execution_time_ms": 0.265
+    "planning_time_ms": 0.277,
+    "execution_time_ms": 0.425
   },
   "document_embedding_benchmark": {
     "provider": "local",
-    "model": "hashing-vectorizer-1024",
-    "vector_dimension": 1024,
+    "model": "intfloat/e5-small-v2",
+    "vector_dimension": 384,
     "sample_size": 100,
     "batch_size": 1,
     "warmup_documents": 1,
     "clock": "time.perf_counter",
-    "total_generation_time_seconds": 0.014351800084114075,
+    "total_generation_time_seconds": 9.748045499960426,
     "per_document_latency_ms": {
-      "mean": 0.14314899686723948,
-      "median": 0.12709968723356724,
-      "p95": 0.23420513607561586,
-      "min": 0.0820998102426529,
-      "max": 0.2749003469944
+      "mean": 97.47845500067342,
+      "median": 96.53545002220199,
+      "p95": 150.35124500573147,
+      "min": 34.23290001228452,
+      "max": 174.1158000077121
     },
-    "throughput_documents_per_second": 6967.767068514941,
+    "throughput_documents_per_second": 10.258466684465718,
     "gpu_used": false,
     "hardware": {
       "cpu": {
-        "model": "13th Gen Intel(R) Core(TM) i5-1335U",
+        "model": "AMD Ryzen 5 5600H with Radeon Graphics",
         "logical_cores": 12,
-        "physical_cores": 10
+        "physical_cores": 6
       },
-      "total_ram_bytes": 16847880192,
+      "total_ram_bytes": 16487870464,
       "gpu": {
         "model": "No GPU",
         "vram_bytes": null
@@ -139,7 +139,8 @@
     "index_modified": false,
     "source_functions": [
       "data.embed_structured_events._event_text",
-      "data.embed_structured_events._hashed_vector"
+      "retrieval.embeddings.build_document_text",
+      "retrieval.embeddings.build_embedding_client"
     ]
   }
 }

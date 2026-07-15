@@ -53,8 +53,8 @@ class FakeCursor:
             self.row = {
                 "embedded_documents": 211,
                 "total_documents": 250,
-                "vector_dimension": 1024,
-                "embedding_models": ["hashing-vectorizer-1024"],
+                "vector_dimension": 384,
+                "embedding_models": ["intfloat/e5-small-v2"],
             }
         elif "pg_relation_size" in query:
             self.row = {
@@ -129,7 +129,7 @@ class RealBenchmarkTests(unittest.TestCase):
         self.assertEqual("real_postgresql_pgvector", results["benchmark_type"])
         self.assertEqual("No GPU", results["platform"]["gpu"]["model"])
         self.assertEqual(211, results["embedding"]["embedded_documents"])
-        self.assertEqual(1024, results["embedding"]["vector_dimension"])
+        self.assertEqual(384, results["embedding"]["vector_dimension"])
         self.assertEqual(1, results["embedding"]["batch_size"])
         self.assertEqual("hnsw", results["index"]["type"])
         self.assertIsNone(results["index"]["build_time_seconds"])
@@ -219,7 +219,7 @@ class RealBenchmarkTests(unittest.TestCase):
         benchmark = results["document_embedding_benchmark"]
         self.assertEqual(["d1", "d1", "d2"], calls)
         self.assertEqual(benchmark, saved["document_embedding_benchmark"])
-        self.assertEqual("hashing-vectorizer-1024", benchmark["model"])
+        self.assertTrue(benchmark["model"])
         self.assertEqual(2, benchmark["sample_size"])
         self.assertEqual(1, benchmark["warmup_documents"])
         self.assertAlmostEqual(0.005, benchmark["total_generation_time_seconds"])

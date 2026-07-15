@@ -5,6 +5,9 @@ import psycopg
 from database.settings import settings
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+MIGRATION_ALIASES = {
+    "007_structured_events_embedding.sql": {"007_structured_events_embedding_dim_384.sql"},
+}
 
 
 def _postgres_url(database_url: str) -> str:
@@ -30,7 +33,8 @@ def apply_migrations() -> None:
             applied = {row[0] for row in cur.fetchall()}
 
             for migration_path in sorted(MIGRATIONS_DIR.glob("*.sql")):
-                if migration_path.name in applied:
+                legacy_names = MIGRATION_ALIASES.get(migration_path.name, set())
+                if migration_path.name in applied or legacy_names & applied:
                     continue
 
                 sql = migration_path.read_text(encoding="utf-8")

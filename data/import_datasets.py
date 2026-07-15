@@ -30,6 +30,32 @@ DEFAULT_GHARCHIVE_BASE_URL = "https://data.gharchive.org"
 DEFAULT_HN_SEARCH_URL = "https://hn.algolia.com/api/v1/search_by_date"
 DEFAULT_GOOGLE_NEWS_RSS_URL = "https://news.google.com/rss/search"
 DEFAULT_OSV_QUERY_URL = "https://api.osv.dev/v1/query"
+GDELT_2005_SOURCE_NAME = "gdelt_2005_events"
+GDELTV2_SOURCE_NAME = "gdeltv2_recent_events"
+PROFILE_DEFAULT_MINIMUM_TOTAL = 50_000
+LARGE_IMPORT_PRESET = {
+    "minimum_total": 500_000,
+    "news_limit": 0,
+    "logs_limit": 0,
+    "hf_loghub_limit": 0,
+    "statuspage_limit": 5_000,
+    "hn_limit_per_provider": 100,
+    "google_news_limit_per_provider": 100,
+    "osv_limit_per_package": 100,
+    "gdelt_limit": 0,
+    "gdeltv2_limit": 400_000,
+    "gdeltv2_max_files": 600,
+    "gdeltv2_start": datetime(2026, 6, 1, tzinfo=UTC),
+    "gdeltv2_end": datetime(2026, 7, 14, tzinfo=UTC),
+    "gdeltv2_max_files_per_day": 8,
+    "gharchive_projects": 400,
+    "gharchive_log_limit": 100_000,
+    "gharchive_news_limit": 5_000,
+}
+PROFILE_PRESETS = {
+    "large": LARGE_IMPORT_PRESET,
+    "project_500k": LARGE_IMPORT_PRESET,
+}
 STATUSPAGE_SOURCES = {
     "GitHub": "https://www.githubstatus.com/api/v2/incidents.json",
     "Cloudflare": "https://www.cloudflarestatus.com/api/v2/incidents.json",
@@ -145,6 +171,17 @@ def parse_datetime(value: str | None) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
+
+
+def apply_profile(args: argparse.Namespace) -> int:
+    profile_name = str(getattr(args, "profile", "default") or "default")
+    preset = PROFILE_PRESETS.get(profile_name)
+    if preset is None:
+        return int(getattr(args, "minimum_total", PROFILE_DEFAULT_MINIMUM_TOTAL))
+
+    for key, value in preset.items():
+        setattr(args, key, value)
+    return int(preset["minimum_total"])
 
 
 def news_title_and_body(text: str) -> tuple[str, str | None]:
@@ -1186,12 +1223,16 @@ def insert_gdelt_events(
         cur.execute(
             """
             INSERT INTO news_sources (name, source_type, url, country, language, metadata)
-            VALUES ('gdelt_2005_events', 'gdelt_event', %s, 'GLOBAL', 'en', %s::jsonb)
+            VALUES (%s, 'gdelt_event', %s, 'GLOBAL', 'en', %s::jsonb)
             ON CONFLICT (name)
             DO UPDATE SET url = EXCLUDED.url, metadata = EXCLUDED.metadata, updated_at = now()
             RETURNING id
             """,
-            (url, json.dumps({"seeded": True, "loader": "data.import_datasets"})),
+            (
+                GDELT_2005_SOURCE_NAME,
+                url,
+                json.dumps({"seeded": True, "loader": "data.import_datasets"}),
+            ),
         )
         source_id = cur.fetchone()[0]
 
@@ -1229,12 +1270,13 @@ def insert_gdelt_events(
                             raw_payload,
                             content_hash
                         )
-                        VALUES ('gdelt_2005_events', %s, 'gdelt_event', %s, %s, %s, %s, 'en', %s, %s::jsonb, %s)
+                        VALUES (%s, %s, 'gdelt_event', %s, %s, %s, %s, 'en', %s, %s::jsonb, %s)
                         ON CONFLICT (source, url_hash)
                         WHERE url_hash IS NOT NULL
                         DO UPDATE SET last_seen_at = now(), fetch_count = raw_news.fetch_count + 1
                         """,
                         (
+                            GDELT_2005_SOURCE_NAME,
                             source_id,
                             row_url,
                             sha256_hex(row_url),
@@ -1327,12 +1369,13 @@ def insert_gdeltv2_events(
         cur.execute(
             """
             INSERT INTO news_sources (name, source_type, url, country, language, metadata)
-            VALUES ('gdeltv2_recent_events', 'gdeltv2_event', %s, 'GLOBAL', 'en', %s::jsonb)
+            VALUES (%s, 'gdeltv2_event', %s, 'GLOBAL', 'en', %s::jsonb)
             ON CONFLICT (name)
             DO UPDATE SET url = EXCLUDED.url, metadata = EXCLUDED.metadata, updated_at = now()
             RETURNING id
             """,
             (
+                GDELTV2_SOURCE_NAME,
                 master_url,
                 json.dumps({"seeded": True, "loader": "data.import_datasets", "source": "GDELT 2.1 Events"}),
             ),
@@ -1372,7 +1415,7 @@ def insert_gdeltv2_events(
                                 raw_payload,
                                 content_hash
                             )
-                            VALUES ('gdeltv2_recent_events', %s, 'gdeltv2_event', %s, %s, %s, %s, 'en', %s, %s::jsonb, %s)
+                            VALUES (%s, %s, 'gdeltv2_event', %s, %s, %s, %s, 'en', %s, %s::jsonb, %s)
                             ON CONFLICT (source, url_hash)
                             WHERE url_hash IS NOT NULL
                             DO UPDATE SET title = EXCLUDED.title,
@@ -1383,6 +1426,7 @@ def insert_gdeltv2_events(
                                           fetch_count = raw_news.fetch_count + 1
                             """,
                             (
+                                GDELTV2_SOURCE_NAME,
                                 source_id,
                                 row_url,
                                 sha256_hex(row_url),
@@ -1431,6 +1475,7 @@ def count_objects(conn: psycopg.Connection) -> dict[str, int]:
 
 
 def main(args: argparse.Namespace) -> None:
+    minimum_total = apply_profile(args)
     apply_migrations()
     with psycopg.connect(_postgres_url(settings.database_url)) as conn:
         news_count = insert_news(conn, args.news_dataset, args.news_split, args.news_limit)
@@ -1501,12 +1546,14 @@ def main(args: argparse.Namespace) -> None:
     print(f"Imported GH Archive release rows: {gharchive_news}")
     for table_name, value in counts.items():
         print(f"{table_name}: {value}")
-    if counts["total_selected"] < 50_000:
-        raise SystemExit("Imported fewer than 50 000 selected objects.")
+    if counts["total_selected"] < minimum_total:
+        raise SystemExit(f"Imported fewer than {minimum_total} selected objects.")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Import open-source news, event, and log datasets into PostgreSQL.")
+    parser.add_argument("--profile", choices=("default", *PROFILE_PRESETS.keys()), default="default")
+    parser.add_argument("--minimum-total", type=int, default=PROFILE_DEFAULT_MINIMUM_TOTAL)
     parser.add_argument("--news-dataset", default=DEFAULT_NEWS_DATASET)
     parser.add_argument("--news-split", default="train")
     parser.add_argument("--news-limit", type=int, default=50_000)

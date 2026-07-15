@@ -1,238 +1,154 @@
-# Incident-to-News-Semantic-Search
+# Incident-to-News Semantic Search
 
-A project for connecting incident/status logs with semantically relevant news,
-incident reports, project activity, and security advisories.
+This project is a search system for incident logs. A user provides an
+operational log, outage update, security advisory event, or open-source project
+activity record, and the system returns related news-like documents: statuspage
+incident reports, OSV advisories, GitHub releases, Hacker News/Google News
+stories, and GDELT events.
 
-## Pipeline Tasks
+The target user is an SRE, support engineer, security analyst, or course
+evaluator who needs to connect a short technical event to relevant external
+context.
 
-The task-oriented pipeline connects an original log to candidate articles and
-adds concise reasoning for each retrieved result.
+## Architecture
 
-Data flow:
+The system has the four required search components:
 
-1. `event_extraction` turns an original log into typed `IncidentData`.
-2. `retrieval` ranks candidate `NewsArticle` records.
-3. `retrieval.reasoning.NewsReasoningService` compares the incident data with each article.
-4. `api.pipeline.IncidentNewsSearchPipeline` returns the existing news result fields plus a `reasoning` field.
+- vectorization model: local sentence-transformer embeddings for structured
+  events
+- vector storage: PostgreSQL with pgvector
+- index: HNSW over `structured_events.embedding`
+- search algorithm: BM25, dense pgvector retrieval, reciprocal-rank fusion,
+  heuristic scoring, and optional LLM reranking (DeepSeek)
 
-When the reasoner cannot find concrete shared evidence, it returns:
+The production query path is:
 
-```text
-No strong connection could be identified.
-```
+1. parse the incident/log into structured hints
+2. rewrite the query for lexical and semantic retrieval
+3. retrieve candidates with BM25
+4. retrieve candidates with dense pgvector search
+5. fuse candidates with weighted reciprocal-rank fusion
+6. rerank the shortlist with the LLM (DeepSeek), when enabled
 
-Current folders:
+## Data
 
-```text
-.
-+-- api/
-+-- data/
-+-- database/
-+-- docs/
-+-- evaluation/
-+-- event_extraction/
-+-- retrieval/
-`-- tests/
-```
+The current database contains:
 
-## Database And Dataset Scope
+| table | rows |
+| --- | ---: |
+| `raw_news` | 518,768 |
+| `raw_logs` | 9,718 |
+| `structured_events` | 211 |
+| total counted objects | 528,739 |
 
-Done for the database/data-loading stage:
+Data sources:
 
-- PostgreSQL schema and migrations.
-- `raw_news` table for news/event records.
-- `raw_logs` table for availability/status update logs.
-- Dataset import script with more than 50 000 objects.
-- Database count check script.
-- Docker-ready compressed PostgreSQL dump.
+- public Statuspage incident APIs
+- OSV.dev advisories
+- GH Archive events and releases
+- Hacker News Algolia search
+- Google News RSS
+- GDELT event exports
 
-Current dataset choice:
+## Evaluation
 
-- Recent news/events: GDELT 2.1 Events from the latest 15-minute export files.
-- Targeted tech news/discussions: Hacker News Algolia stories queried by
-  provider + outage/incident/status keywords.
-- Targeted real news: Google News RSS stories queried by provider +
-  outage/down/incident/status keywords.
-- Open-source security advisories: OSV.dev advisories for popular PyPI, npm,
-  Go, Maven, and crates.io packages.
-- Open-source project activity/news: GH Archive public GitHub events. Release
-  events are stored as `github_release` news, and matching GitHub activity
-  events are stored as logs.
-- Availability/status logs: public Statuspage incident APIs for GitHub,
-  Cloudflare, OpenAI, Discord, Reddit, Datadog, Atlassian, Twilio, SendGrid,
-  DigitalOcean, Vercel, Netlify, Supabase, Anthropic, Shopify, and Zoom.
-- Status incident reports are also stored in `raw_news` as
-  `statuspage_incident`, so each update log can be joined back to its incident
-  by `raw_payload.incident_id`.
+The course metrics used for quality are:
 
-The old AG News / Loghub Apache / GDELT 2005 rows were removed from the local
-database because their timeline did not match the availability-log task.
+- `Precision@10`
+- `Recall@10`
+- `MRR@10`
+- `MAP`
+- `nDCG@10`
 
-Current included Docker dump:
+The project also tracks hit rate, hard-negative hit rate, latency, hardware, HNSW
+index size, and embedding generation speed.
 
-- `raw_news`: 344 449 rows
-- `raw_logs`: 9 210 rows
-- `news_sources`: 42 rows
-- `structured_events`: 211 rows
-- total selected objects: 353 912 rows
+### Blind Qrels Validation
 
-Relevance checks:
+Full run on 150 blind queries with graded qrels. Hybrid includes LLM reranking
+(DeepSeek).
 
-- 7 882 status update logs have direct linked incident reports.
-- 5 805 status update logs have Hacker News provider/time candidates.
-- 3 938 status update logs have Google News provider/time candidates.
-- 417 GitHub activity logs have matching GitHub release rows.
-- 860 OSV package events have direct linked security advisories.
+| mode | nDCG@10 | MRR@10 | Recall@10 | Precision@10 | hard-neg@10 | mean ms | p95 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| BM25 | 0.234 | 0.246 | 0.172 | 0.209 | 0.000 | 31.7 | 63.0 |
+| Dense | 0.836 | 0.896 | 0.639 | 0.170 | 0.453 | 76.6 | 59.8 |
+| pgvector | 0.836 | 0.896 | 0.639 | 0.170 | 0.453 | 18.1 | 34.9 |
+| Hybrid + LLM | 0.840 | 0.895 | 0.663 | 0.173 | 0.460 | 7088.9 | 8907.1 |
 
-Open-source subset:
+### Linked Validation
 
-- 300 GH Archive projects selected
-- 409 `github_release` rows
-- 468 `gharchive_open_source` log rows
+This is a sanity check on 150 linked examples where positives are known from
+source identifiers. Hybrid includes LLM reranking (DeepSeek).
 
-## Setup
+| mode | hit@10 | nDCG@10 | MRR@10 | Recall@10 | mean ms | p95 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| BM25 | 0.560 | 0.515 | 0.500 | 0.560 | 836.9 | 2422.4 |
+| Dense | 1.000 | 0.961 | 0.947 | 1.000 | 151.8 | 168.4 |
+| pgvector | 1.000 | 0.961 | 0.947 | 1.000 | 33.3 | 46.8 |
+| Hybrid + LLM | 1.000 | 0.985 | 0.980 | 1.000 | 7937.4 | 10903.2 |
+
+### Vector Analysis
+
+Measured on the blind validation set:
+
+| metric | value |
+| --- | ---: |
+| separation rate | 0.940 |
+| mean positive cosine | 0.879 |
+| mean hardest-negative cosine | 0.833 |
+| mean margin | 0.045 |
+
+### System Benchmark
+
+Read-only PostgreSQL/pgvector benchmark using already saved embeddings.
+
+| item | value |
+| --- | --- |
+| OS | Windows 10 |
+| Python | 3.11.2 |
+| CPU | AMD Ryzen 5 5600H with Radeon Graphics, 12 logical / 6 physical cores |
+| RAM | 15.36 GiB |
+| GPU | No GPU |
+| embedded documents | 211 / 211 |
+| embedding model | `intfloat/e5-small-v2`, 384 dimensions |
+| vector index | HNSW, `ix_structured_events_embedding` |
+| index size | 432 KiB |
+| HNSW used | yes |
+| sequential scan used | no |
+
+Retrieval latency for pgvector:
+
+| stage | mean ms | p95 ms |
+| --- | ---: | ---: |
+| query embedding | 26.7 | 31.9 |
+| database/index search | 2.5 | 2.8 |
+| end-to-end retrieval | 29.2 | 34.4 |
+
+Embedding generation was benchmarked in memory on 100 existing documents, with
+no database writes:
+
+| metric | value |
+| --- | ---: |
+| total time | 9.748 s |
+| throughput | 10.26 docs/s |
+| mean per document | 97.5 ms |
+| p95 per document | 150.4 ms |
+
+## Run Locally
+
+Install dependencies and configure `.env`:
 
 ```powershell
 py -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-For the included Docker PostgreSQL:
-
-```dotenv
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search
-EMBEDDING_DIM=1024
-```
-
-## Run Database
-
-The repository includes a compressed PostgreSQL dump at
-`database/initdb/001_incident_news_search.sql.gz`. On a fresh Docker volume,
-PostgreSQL restores it automatically through `/docker-entrypoint-initdb.d`.
-
-```powershell
-docker compose up -d postgres
-```
-
-If you already have an old local Docker volume and need to reload the included
-dump from scratch:
-
-```powershell
-docker compose down -v
-docker compose up -d postgres
-```
-
-## Apply Migrations
-
-Only run migrations when creating an empty database without the included dump.
-The included dump already contains the schema and loaded data.
+Start PostgreSQL, apply migrations, load the large dataset, and run the API:
 
 ```powershell
 $env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
 py -m database.migrate
-```
-
-## Load Current Dataset
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-py -m data.import_datasets --news-limit 0 --logs-limit 0 --gdelt-limit 0 --statuspage-limit 5000 --hn-limit-per-provider 100 --google-news-limit-per-provider 80 --osv-limit-per-package 100 --gdeltv2-limit 250000 --gdeltv2-start 2026-06-01 --gdeltv2-end 2026-07-07 --gdeltv2-max-files 400 --gdeltv2-max-files-per-day 8 --gharchive-projects 300 --gharchive-log-limit 50000 --gharchive-news-limit 2000
-```
-
-## Check Loaded Rows
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-py -m database.check
-```
-
-## Check Relevance Coverage
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-py -m database.relevance_check
-```
-
-The expensive GDELT provider/time diagnostic is optional:
-
-```powershell
-py -m database.relevance_check --include-gdelt
-```
-
-## Extract Structured Events
-
-Convert raw news records into rule-based `structured_events` rows:
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-py -m data.extract_structured_events --limit 1000
-```
-
-## Validation Set
-
-The linked validation set is stored at:
-
-```text
-evaluation/data/validation_set.json
-```
-
-It contains 150 labeled log-news examples:
-
-- 50 Statuspage update logs linked to incident reports by `incident_id`
-- 50 OSV package logs linked to advisories by `advisory_id`
-- 50 GH Archive activity logs linked to GitHub releases by repository and time window
-
-Regenerate the linked validation set from the loaded database with:
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-py -m evaluation.build_validation_set --limit-per-source 50
-```
-
-Build the linked/blind validation views and graded qrels:
-
-```powershell
-py -m evaluation.build_validation_views
-```
-
-Run linked retrieval validation:
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-py -m evaluation.validate_retrieval --top-k 10
-```
-
-Run blind graded validation:
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-py -m evaluation.validate_qrels --top-k 10
-```
-
-Current linked-validation result on the included dump:
-
-- `bm25`: hit@10 = 0.66
-- `dense`: hit@10 = 1.00
-- `pgvector`: hit@10 = 0.99
-- `hybrid`: hit@10 = 1.00
-
-Current blind qrels result on the included dump:
-
-- `bm25`: nDCG@10 = 0.29, MRR@10 = 0.31
-- `dense`: nDCG@10 = 0.52, MRR@10 = 0.55
-- `pgvector`: nDCG@10 = 0.84, MRR@10 = 0.90
-- `hybrid`: nDCG@10 = 0.72, MRR@10 = 0.71
-
-`validation_set.json` is the linked sanity view, while `validation_blind.json`
-and `qrels.jsonl` are the evaluation artifacts that should be used for the
-honest offline report.
-
-## FastAPI Demo
-
-Run the API:
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
+py -m data.import_datasets --profile large
 py -m uvicorn api.app:app --reload
 ```
 
@@ -240,208 +156,61 @@ Search endpoints:
 
 - `POST /search/bm25`
 - `POST /search/dense`
-- `POST /search/hybrid`
 - `POST /search/pgvector`
+- `POST /search/hybrid`
+- `GET /metrics`
 
-Example request:
+## Docker
 
-```json
-{
-  "log": "Twilio SMS delivery failures from Twilio Phone Numbers to Spusu Italy investigating",
-  "top_k": 5
-}
+Start the database and API:
+
+```powershell
+docker compose up --build postgres api
 ```
 
-## Long Real-Source Harvest
+Run the database check and embedding jobs through Docker profiles:
 
-Continuously harvest paired real sources without Loghub:
+```powershell
+docker compose --profile tools run --rm check
+docker compose --profile tools run --rm embed
+docker compose --profile tools run --rm validate_linked
+docker compose --profile tools run --rm validate_qrels
+docker compose --profile tools run --rm embedding_analysis
+docker compose --profile tools run --rm benchmark_real
+```
+
+The API is available on `http://127.0.0.1:8000`.
+
+## Embeddings
+
+Embeddings are stored in PostgreSQL in `structured_events.embedding` and
+`structured_events.embedding_model`. The search path uses saved embeddings.
+
+To generate embeddings for all current structured events:
 
 ```powershell
 $env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-py -m data.harvest_real_sources --duration-hours 6 --interval-minutes 30 --statuspage-limit 5000 --hn-limit-per-provider 100 --osv-limit-per-package 20 --gdeltv2-limit 10000 --gdeltv2-max-files 24 --gharchive-projects 300 --gharchive-log-limit 50000 --gharchive-news-limit 2000 --gharchive-lookback-hours 6
+py -m data.embed_structured_events --limit 1000000
 ```
 
-Progress is written to `logs/harvest_real_sources.log`.
-
-## Run Tests
-
-```bash
-python -m unittest discover -v
-```
-
-Current test coverage includes:
-
-- `tests/test_embeddings.py` for OpenAI embedding generation behavior
-- `tests/test_e2e_pipeline.py` for the end-to-end extraction -> retrieval -> reasoning path
-- `tests/test_pipeline.py` and the existing evaluation and API tests for the current project flow
-
-The full suite is expected to pass locally before changes are merged.
-
-## Evaluation Dataset
-
-The default labeled dataset is stored at:
-
-```text
-evaluation/data/evaluation_dataset.json
-```
-
-Each query contains an `incident_log`, a list of `candidate_articles`, and
-`relevant_article_ids`. To prepare a new dataset, keep the same JSON structure
-and use deterministic, non-production examples so local and CI runs are
-reproducible.
-
-## Run Retrieval Evaluation
-
-Run all configured retrieval approaches with:
-
-```bash
-python -m evaluation.runner
-```
-
-The evaluation compares:
-
-- `keyword_lexical`: token-overlap lexical retrieval.
-- `semantic_embedding`: deterministic hash-based token embeddings with cosine similarity.
-- `hybrid`: combined lexical and semantic score.
-- `current_default`: the existing `InMemoryNewsRetriever` used by the project pipeline.
-
-Results are saved to:
-
-```text
-evaluation/results.json
-evaluation/results.csv
-```
-
-The command also prints a comparison table in the console.
-
-## Benchmark Retrieval Performance
-
-Two benchmarks are available and write to separate result files.
-
-The synthetic benchmark uses the small three-query evaluation dataset and an
-in-memory exact-cosine index. It is dependency-light and intended for local and
-CI regression checks:
-
-```bash
-python -m evaluation.benchmark_search
-```
-
-The command times document embedding and exact-cosine index construction
-separately, performs one warm-up search, and reports latency statistics for 100
-measured searches. It also records the dataset, model, index, platform, CPU,
-RAM, and GPU (or `No GPU`) details. Results are printed to the console and saved
-to:
-
-```text
-evaluation/benchmark_results.json
-```
-
-Use `--searches`, `--top-k`, `--dimensions`, `--dataset`, or `--output` to
-override benchmark settings. `--searches` must be at least 100.
-
-### Real PostgreSQL/pgvector Benchmark
-
-The real benchmark uses representative queries from the 150-example validation
-set, the existing `structured_events` embeddings, the production query
-vectorizer and dense-search SQL, and the existing pgvector HNSW index. Its safe
-default is read-only: it neither generates embeddings nor rebuilds the index.
-
-Requirements:
-
-- install `requirements.txt` (including `psycopg`);
-- start the included PostgreSQL/pgvector database;
-- set `DATABASE_URL` and `EMBEDDING_DIM` as shown in `.env.example`;
-- ensure the database migrations, structured events, embeddings, and HNSW index
-  already exist.
-
-Safe read-only benchmark command:
+To recompute existing embeddings after changing the model or dimension:
 
 ```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-$env:EMBEDDING_DIM='1024'
-python -m evaluation.benchmark_real
+py -m data.embed_structured_events --refresh --limit 1000000
 ```
 
-Results are printed and saved separately to:
+If more raw news is imported, first extract more `structured_events`, then rerun
+the embedding command.
 
-```text
-evaluation/benchmark_real_results.json
-```
-
-Embedding generation is opt-in and only fills currently missing
-`structured_events.embedding` values using the existing generator:
+## Checks
 
 ```powershell
-python -m evaluation.benchmark_real --generate-embeddings --embedding-limit 1000
+py -m unittest discover -v
+py -m database.check --min-total 50000
+py -m evaluation.validate_qrels --top-k 10
+py -m evaluation.validate_retrieval --top-k 10
+py -m evaluation.embedding_analysis --backend auto
+py -m evaluation.benchmark_real --benchmark-document-embeddings --embedding-sample-size 100
 ```
 
-Rebuilding the existing production HNSW index is also opt-in:
-
-```powershell
-python -m evaluation.benchmark_real --rebuild-index
-```
-
-Both optional flags modify the database and can be combined when explicitly
-needed. The real result includes PostgreSQL-reported index size and
-configuration, separate query-embedding/database/end-to-end latency statistics,
-and an `EXPLAIN ANALYZE` summary showing whether the HNSW index or a sequential
-scan was used. The existing synthetic result remains at
-`evaluation/benchmark_results.json` and is never overwritten by this command.
-
-### Safe Document Embedding Benchmark
-
-Benchmark the exact production `structured_events` text preparation and
-`hashing-vectorizer-1024` generator on 100 existing documents, entirely in
-memory:
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-$env:EMBEDDING_DIM='1024'
-python -m evaluation.benchmark_real --benchmark-document-embeddings
-```
-
-Use `--embedding-sample-size N` to change the default sample size of 100. This
-mode performs one untimed warm-up, runs inside a read-only PostgreSQL
-transaction, and cannot be combined with `--generate-embeddings` or
-`--rebuild-index`. Vectors are generated in memory and never persisted. The
-result is stored under `document_embedding_benchmark` in
-`evaluation/benchmark_real_results.json`; the existing real retrieval and
-synthetic benchmark commands remain unchanged.
-
-## Evaluation Metrics
-
-- `Precision@k`: the fraction of the top `k` retrieved articles that are relevant.
-- `Recall@k`: the fraction of all relevant articles found in the top `k`.
-- `MRR`: mean reciprocal rank of the first relevant article.
-- `MAP`: mean average precision across all evaluated queries.
-- `nDCG@k`: ranking quality at `k`, giving more credit when relevant articles appear higher.
-
-## Dense, Sparse, And Hybrid Retrieval
-
-The branch also includes a PostgreSQL-backed retrieval path for incident-to-news
-matching. This is separate from the in-memory pipeline above and is meant for
-later tasks around embeddings, pgvector search, BM25 baseline search, and hybrid
-ranking.
-
-What is included:
-
-- incident text normalization for embeddings and lexical search
-- OpenAI embedding generation for incident logs
-- PostgreSQL schema with vector columns
-- HNSW indexes for dense search
-- GIN + `tsvector` support for BM25-style full-text search
-- reciprocal rank fusion for hybrid search
-- a CLI for schema setup, embedding generation, search, and benchmarking
-
-Typical commands:
-
-```bash
-python -m retrieval.cli init-db
-python -m retrieval.cli embed-incident --original-log "API timeout after deploy"
-python -m retrieval.cli fulltext-search --query-text "API timeout deploy"
-python -m retrieval.cli benchmark-dense --query-embedding "[0.1, 0.2, 0.3]" --limit 10
-```
-
-The benchmark command prints latency for the indexed path and for the path with
-index usage disabled, plus `EXPLAIN ANALYZE` output so you can verify whether
-HNSW is really chosen.
+Saved reports are written under `evaluation/` and are exposed by `GET /metrics`.

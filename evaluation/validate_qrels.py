@@ -26,23 +26,10 @@ def evaluate(validation_path: Path, qrels_path: Path, top_k: int) -> dict:
 
     for example in examples:
         query_id = example["id"]
-        for mode in ("bm25", "dense", "pgvector"):
+        for mode in ("bm25", "dense", "pgvector", "hybrid"):
             started = time.perf_counter()
             raw_hits[query_id][mode] = service.search(example["query"]["message"], mode=mode, top_k=top_k)
             raw_latency[query_id][mode] = (time.perf_counter() - started) * 1000
-        started = time.perf_counter()
-        raw_hits[query_id]["hybrid"] = _fuse_hits(
-            raw_hits[query_id]["bm25"],
-            raw_hits[query_id]["dense"],
-            raw_hits[query_id]["pgvector"],
-            top_k,
-        )
-        raw_latency[query_id]["hybrid"] = (
-            raw_latency[query_id]["bm25"]
-            + raw_latency[query_id]["dense"]
-            + raw_latency[query_id]["pgvector"]
-            + (time.perf_counter() - started) * 1000
-        )
 
     results = {"validation_set": str(validation_path), "qrels": str(qrels_path), "queries": len(examples), "top_k": top_k, "modes": {}}
     for mode in modes:
@@ -140,29 +127,6 @@ def _percentile(values: list[float], percentile: int) -> float:
     ordered = sorted(values)
     index = min(len(ordered) - 1, max(0, math.ceil((percentile / 100) * len(ordered)) - 1))
     return ordered[index]
-
-
-def _fuse_hits(bm25: list[DbNewsHit], dense: list[DbNewsHit], pgvector: list[DbNewsHit], top_k: int) -> list[DbNewsHit]:
-    by_id: dict[str, DbNewsHit] = {}
-    scores: dict[str, float] = {}
-    for hits in (bm25, dense, pgvector):
-        for hit in hits:
-            by_id.setdefault(hit.id, hit)
-            scores[hit.id] = scores.get(hit.id, 0.0) + 1.0 / (60 + hit.rank)
-    ranked_ids = sorted(scores, key=lambda item_id: scores[item_id], reverse=True)[:top_k]
-    return [
-        DbNewsHit(
-            **{
-                **by_id[item_id].__dict__,
-                "score": scores[item_id],
-                "rank": rank,
-                "method": "hybrid",
-            }
-        )
-        for rank, item_id in enumerate(ranked_ids, start=1)
-    ]
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate retrieval with graded qrels.")
     parser.add_argument("--validation-set", type=Path, default=DEFAULT_VALIDATION_SET)

@@ -1,11 +1,19 @@
-from retrieval.reasoning import NO_STRONG_CONNECTION, NewsReasoningService
-from retrieval.schemas import NewsArticle, RetrievedNewsResult
-from retrieval.service import InMemoryNewsRetriever
+from retrieval.db_search import DbNewsHit, DbNewsSearchService, SearchMode
+from retrieval.embeddings import (
+    HashingEmbeddingClient,
+    SentenceTransformerEmbeddingClient,
+    build_embedding_client,
+)
+from retrieval.llm_reranker import DeepSeekReranker
+from retrieval.multistage import MultiStageNewsSearch
 
 __all__ = [
-    "InMemoryNewsRetriever",
-    "NO_STRONG_CONNECTION",
-    "NewsArticle",
-    "NewsReasoningService",
-    "RetrievedNewsResult",
+    "DbNewsHit",
+    "DbNewsSearchService",
+    "DeepSeekReranker",
+    "HashingEmbeddingClient",
+    "MultiStageNewsSearch",
+    "SearchMode",
+    "SentenceTransformerEmbeddingClient",
+    "build_embedding_client",
 ]

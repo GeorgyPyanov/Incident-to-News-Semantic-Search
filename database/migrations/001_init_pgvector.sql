@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS structured_events (
     published_at TIMESTAMPTZ,
     extraction_method VARCHAR(32) NOT NULL,
     extraction_confidence DOUBLE PRECISION,
-    embedding vector(1024),
+    embedding vector(384),
     embedding_model VARCHAR(128),
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
