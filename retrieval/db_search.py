@@ -111,17 +111,16 @@ LIMIT %(limit)s
 PGVECTOR_SQL = """
 SELECT
     rn.id::text AS id,
-    se.title,
+    rn.title,
     rn.url,
     rn.source,
     rn.source_type,
     rn.published_at,
-    left(coalesce(se.summary, rn.body, rn.title), 240) AS snippet,
-    1 - (se.embedding <=> %(embedding)s::vector) AS score
-FROM structured_events se
-JOIN raw_news rn ON rn.id = se.raw_news_id
-WHERE se.embedding IS NOT NULL
-ORDER BY se.embedding <=> %(embedding)s::vector
+    left(coalesce(rn.body, rn.title), 240) AS snippet,
+    1 - (rn.embedding <=> %(embedding)s::vector) AS score
+FROM raw_news rn
+WHERE rn.embedding IS NOT NULL
+ORDER BY rn.embedding <=> %(embedding)s::vector
 LIMIT %(limit)s
 """
 
@@ -131,6 +130,7 @@ class DbNewsSearchService:
         self._embedding_client = None
         self._query_embedding_cache: dict[str, list[float]] = {}
         self._migrations_applied = False
+        self._hybrid_search = None
 
     def search(self, query: str, mode: SearchMode, top_k: int = 10) -> list[DbNewsHit]:
         top_k = max(1, min(top_k, 50))
@@ -181,7 +181,14 @@ class DbNewsSearchService:
         from retrieval.multistage import MultiStageNewsSearch
 
         self._ensure_migrations()
-        return MultiStageNewsSearch(self).search(query, top_k=top_k)
+        if self._hybrid_search is None:
+            self._hybrid_search = MultiStageNewsSearch(self)
+        return self._hybrid_search.search(query, top_k=top_k)
+
+    def close(self) -> None:
+        hybrid_search = self._hybrid_search
+        if hybrid_search is not None:
+            hybrid_search.close()
 
     def _identifier_rows(self, cur, query: str, limit: int) -> list[dict]:
         rows: list[dict] = []

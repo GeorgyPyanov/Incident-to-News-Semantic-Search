@@ -45,6 +45,8 @@ class RawNews(Base):
     raw_region_hint = Column(String(128), nullable=True)
     raw_payload = Column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     content_hash = Column(String(64), nullable=False)
+    embedding = Column(Vector(settings.embedding_dim), nullable=True)
+    embedding_model = Column(String(128), nullable=True)
     is_duplicate = Column(Boolean, nullable=False, server_default=text("false"))
     duplicate_of_id = Column(UUID(as_uuid=True), ForeignKey("raw_news.id"), nullable=True)
     processing_status = Column(String(32), nullable=False, server_default="new")
@@ -71,6 +73,14 @@ class RawNews(Base):
         Index("ix_raw_news_content_hash", "content_hash"),
         Index("ix_raw_news_source_last_seen_at", "source", "last_seen_at"),
         Index("ix_raw_news_source_id_fetched_at", "source_id", "fetched_at"),
+        Index(
+            "ix_raw_news_embedding",
+            embedding,
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_where=text("embedding IS NOT NULL"),
+        ),
         Index(
             "ix_raw_news_unprocessed",
             "processing_status",

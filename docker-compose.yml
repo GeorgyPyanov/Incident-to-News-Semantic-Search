@@ -26,6 +26,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/incident_news_search
+      OLLAMA_BASE_URL: http://ollama:11434
       API_HOST: 0.0.0.0
       API_PORT: 8000
     ports:
@@ -40,6 +41,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: incident-news-ollama
+    profiles: ["llm"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
 
   check:
     build:
@@ -69,7 +79,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["python", "-m", "data.embed_structured_events", "--limit", "1000000"]
+    command: ["python", "-m", "data.embed_raw_news", "--all"]
 
   validate_linked:
     build:
@@ -166,3 +176,4 @@ services:
 volumes:
   postgres_data:
   hf_cache:
+  ollama_data:

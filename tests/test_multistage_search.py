@@ -47,9 +47,17 @@ class FakeBackend:
         )
 
 
+class FakeReranker:
+    def rerank(self, query: str, candidates: list[DbNewsHit]) -> dict[str, float]:
+        return {}
+
+    def close(self) -> None:
+        pass
+
+
 class MultiStageNewsSearchTests(unittest.TestCase):
     def test_reranks_relevant_incident_first(self) -> None:
-        service = MultiStageNewsSearch(FakeBackend())
+        service = MultiStageNewsSearch(FakeBackend(), reranker=FakeReranker())
         results = service.search("2026-07-10 CloudPay payments-api timeout in us-east-1 caused 503 responses.", top_k=2)
 
         self.assertEqual("news-relevant", results[0].id)
@@ -57,7 +65,7 @@ class MultiStageNewsSearchTests(unittest.TestCase):
         self.assertGreater(results[0].score, results[1].score)
 
     def test_normalized_sum_fusion_mode_is_available(self) -> None:
-        service = MultiStageNewsSearch(FakeBackend(), fusion_mode="normalized_sum")
+        service = MultiStageNewsSearch(FakeBackend(), reranker=FakeReranker(), fusion_mode="normalized_sum")
         results = service.search("2026-07-10 CloudPay payments-api timeout in us-east-1 caused 503 responses.", top_k=2)
 
         self.assertEqual(2, len(results))

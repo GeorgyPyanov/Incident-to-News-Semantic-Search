@@ -51,7 +51,7 @@ class FakeCursor:
         self.rows = []
         if "count(*) FILTER" in query:
             self.row = {
-                "embedded_documents": 211,
+                "embedded_documents": 250,
                 "total_documents": 250,
                 "vector_dimension": 384,
                 "embedding_models": ["intfloat/e5-small-v2"],
@@ -63,7 +63,7 @@ class FakeCursor:
                 "size_on_disk_bytes": 123456,
                 "total_size_on_disk_bytes": 131072,
                 "definition": (
-                    "CREATE INDEX ix_structured_events_embedding ON public.structured_events "
+                    "CREATE INDEX ix_raw_news_embedding ON public.raw_news "
                     "USING hnsw (embedding vector_cosine_ops) WITH (m='16', ef_construction='64') "
                     "WHERE (embedding IS NOT NULL)"
                 ),
@@ -85,7 +85,7 @@ class FakeCursor:
                                 {
                                     "Node Type": "Index Scan",
                                     "Index Name": INDEX_NAME,
-                                    "Relation Name": "structured_events",
+                                    "Relation Name": "raw_news",
                                 }
                             ],
                         },
@@ -128,9 +128,12 @@ class RealBenchmarkTests(unittest.TestCase):
 
         self.assertEqual("real_postgresql_pgvector", results["benchmark_type"])
         self.assertEqual("No GPU", results["platform"]["gpu"]["model"])
-        self.assertEqual(211, results["embedding"]["embedded_documents"])
+        self.assertEqual(250, results["embedding"]["embedded_documents"])
         self.assertEqual(384, results["embedding"]["vector_dimension"])
-        self.assertEqual(1, results["embedding"]["batch_size"])
+        self.assertEqual(0, results["embedding"]["unembedded_documents"])
+        self.assertEqual(1.0, results["embedding"]["coverage_ratio"])
+        self.assertEqual(100.0, results["embedding"]["coverage_percent"])
+        self.assertEqual(64, results["embedding"]["batch_size"])
         self.assertEqual("hnsw", results["index"]["type"])
         self.assertIsNone(results["index"]["build_time_seconds"])
         self.assertTrue(results["explain_analyze"]["hnsw_index_used"])

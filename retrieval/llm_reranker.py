@@ -18,6 +18,16 @@ class RerankCandidate(Protocol):
     snippet: str | None
     score: float
 
+
+class Reranker(Protocol):
+    model: str
+    enabled: bool
+    max_candidates: int
+
+    def rerank(self, query: str, candidates: Sequence[RerankCandidate]) -> dict[str, float]: ...
+    def close(self) -> None: ...
+
+
 @dataclass(slots=True)
 class DeepSeekReranker:
     model: str = field(default_factory=lambda: os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash"))
@@ -60,17 +70,7 @@ class DeepSeekReranker:
                     "content": json.dumps(
                         {
                             "query": query,
-                            "candidates": [
-                                {
-                                    "id": candidate.id,
-                                    "title": candidate.title,
-                                    "source": candidate.source,
-                                    "source_type": candidate.source_type,
-                                    "published_at": candidate.published_at,
-                                    "snippet": candidate.snippet,
-                                }
-                                for candidate in shortlist
-                            ],
+                            "candidates": _candidate_payload(shortlist),
                         },
                         ensure_ascii=False,
                     ),
@@ -98,6 +98,39 @@ class DeepSeekReranker:
         if self._client is not None:
             self._client.close()
             self._client = None
+
+
+@dataclass(slots=True)
+class NullReranker:
+    model: str = "none"
+    enabled: bool = False
+    max_candidates: int = 0
+
+    def rerank(self, query: str, candidates: Sequence[RerankCandidate]) -> dict[str, float]:
+        return {}
+
+    def close(self) -> None:
+        return None
+
+
+def build_reranker() -> Reranker:
+    if _truthy(os.environ.get("DEEPSEEK_RERANK_ENABLED")):
+        return DeepSeekReranker()
+    return NullReranker()
+
+
+def _candidate_payload(candidates: Sequence[RerankCandidate]) -> list[dict[str, object]]:
+    return [
+        {
+            "id": candidate.id,
+            "title": candidate.title,
+            "source": candidate.source,
+            "source_type": candidate.source_type,
+            "published_at": candidate.published_at,
+            "snippet": candidate.snippet,
+        }
+        for candidate in candidates
+    ]
 
 
 def _parse_score_map(content: str, candidates: Sequence[RerankCandidate]) -> dict[str, float]:

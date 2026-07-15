@@ -1,39 +1,51 @@
 # Incident-to-News Semantic Search
 
-This project is a search system for incident logs. A user provides an
-operational log, outage update, security advisory event, or open-source project
-activity record, and the system returns related news-like documents: statuspage
-incident reports, OSV advisories, GitHub releases, Hacker News/Google News
-stories, and GDELT events.
+Incident-to-News Semantic Search connects short incident logs to relevant
+external context: statuspage incident reports, OSV advisories, GitHub releases,
+Hacker News or Google News stories, and GDELT events.
 
-The target user is an SRE, support engineer, security analyst, or course
-evaluator who needs to connect a short technical event to relevant external
-context.
+The main user is an SRE, support engineer, security analyst, or evaluator who
+needs to turn a short operational event into related evidence and a cited RAG
+answer.
 
 ## Architecture
 
-The system has the four required search components:
+The system combines lexical retrieval, local embeddings, PostgreSQL/pgvector,
+hybrid ranking, optional DeepSeek reranking, and evidence-grounded answer
+generation.
 
-- vectorization model: local sentence-transformer embeddings for structured
-  events, with optional CPU dynamic quantization for embedding inference
-- vector storage: PostgreSQL with pgvector
-- index: HNSW over `structured_events.embedding`
-- search algorithm: BM25, dense pgvector retrieval, configurable fusion
-  (`rrf` or `normalized_sum`), heuristic scoring, and optional LLM reranking
-  (DeepSeek)
+1. Parse the input log into structured incident hints.
+2. Rewrite the query for lexical and semantic retrieval.
+3. Retrieve candidates with PostgreSQL BM25-style full-text search.
+4. Retrieve candidates with dense pgvector search over `raw_news.embedding`.
+5. Fuse BM25 and dense candidates with RRF or normalized-score fusion.
+6. Apply heuristic scoring over source, provider, identifiers, and time.
+7. Optionally rerank the shortlist with DeepSeek.
+8. For `/answer`, generate a cited response from retrieved evidence or abstain.
 
-The production query path is:
+Primary components:
 
-1. parse the incident/log into structured hints
-2. rewrite the query for lexical and semantic retrieval
-3. retrieve candidates with BM25
-4. retrieve candidates with dense pgvector search
-5. fuse candidates with weighted reciprocal-rank fusion or normalized-score sum
-6. rerank the shortlist with the LLM (DeepSeek), when enabled
+| component | implementation |
+| --- | --- |
+| API | FastAPI |
+| database | PostgreSQL 16 + pgvector |
+| vector index | HNSW, `ix_raw_news_embedding` |
+| dense corpus | `raw_news` |
+| default embedding model | `intfloat/e5-small-v2`, 384 dimensions |
+| fallback embedding backend | deterministic `hashing-vectorizer-384` |
+| hybrid fusion | `rrf` or `normalized_sum` |
+| LLM reranker | DeepSeek, optional |
+| RAG generator | DeepSeek by default, Ollama optional for local generation |
+
+For `top_k=10`, the hybrid retriever requests 120 candidates from each first
+stage: original BM25, rewritten BM25, and dense pgvector. The fused pool can
+contain up to 360 unique candidates. Heuristics score the full fused pool, then
+the top 20 candidates form the LLM shortlist; `DEEPSEEK_RERANK_TOP_N` caps the
+provider payload, and the final endpoint returns 10 results.
 
 ## Data
 
-The current database contains:
+The local large dataset contains:
 
 | table | rows |
 | --- | ---: |
@@ -42,69 +54,83 @@ The current database contains:
 | `structured_events` | 211 |
 | total counted objects | 528,739 |
 
+`raw_news` is the primary retrieval corpus. `structured_events` is an auxiliary
+table for event extraction, diagnostics, and validation links.
+
 Data sources:
 
 - public Statuspage incident APIs
 - OSV.dev advisories
-- GH Archive events and releases
+- GH Archive events and GitHub releases
 - Hacker News Algolia search
 - Google News RSS
 - GDELT event exports
 
+## RAG Answering
+
+`POST /answer` is a RAG endpoint: it retrieves `raw_news` evidence first, then
+asks the generator to answer only from the retrieved titles, snippets, URLs, and
+metadata. If the evidence is weak, the endpoint abstains instead of inventing a
+fix.
+
+Models used:
+
+- embeddings: `intfloat/e5-small-v2` by default, with `hashing-vectorizer-384`
+  as a deterministic local benchmark backend
+- reranking: optional DeepSeek rerank over the hybrid shortlist
+- answer generation: DeepSeek by default; Ollama `qwen2.5:3b` can be used
+  locally with `RAG_GENERATOR_PROVIDER=ollama`
+
+Response statuses:
+
+| status | meaning |
+| --- | --- |
+| `answered` | evidence passed the gates and the LLM returned a valid cited answer |
+| `abstained` | evidence was missing, too weak, or the generated draft failed validation |
+| `llm_unavailable` | evidence was found, but the configured generator call failed |
+
+Example:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/answer `
+  -Method Post `
+  -ContentType 'application/json' `
+  -Body '{"log":"Cloud provider outage caused API 503 errors in us-east-1","top_k":5}'
+```
+
 ## Evaluation
 
-The course metrics used for quality are:
+Reported retrieval metrics:
 
 - `Precision@10`
 - `Recall@10`
 - `MRR@10`
-- `MAP`
 - `nDCG@10`
-
-The project also tracks hit rate, hard-negative hit rate, latency, hardware, HNSW
-index size, and embedding generation speed.
-
-### Iteration Comparison
-
-The project now has a reproducible two-iteration runner:
-
-- iteration 1: `intfloat/e5-small-v2`, BM25 + HNSW pgvector, RRF fusion
-- iteration 2: dynamic-quantized embedding inference, BM25 + HNSW pgvector,
-  `normalized_sum` fusion
-
-The runner records embedding refresh time, HNSW rebuild time, pgvector latency,
-document embedding inference latency, linked-validation quality, blind qrels
-quality, and vector-space analysis. Candidate iteration refreshes stored
-`structured_events.embedding` values so quality is measured against embeddings
-produced by the same configured encoder.
-
-```powershell
-py -m evaluation.compare_iterations --top-k 10 --embedding-sample-size 100
-```
+- `hit@10` for linked validation
+- mean, p50, and p95 latency
 
 ### Blind Qrels Validation
 
-Full run on 150 blind queries with graded qrels. Hybrid includes LLM reranking
-(DeepSeek).
+Evaluation on 150 blind queries with graded relevance judgments.
 
-| mode | nDCG@10 | MRR@10 | Recall@10 | Precision@10 | hard-neg@10 | mean ms | p95 ms |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| BM25 | 0.234 | 0.246 | 0.172 | 0.209 | 0.000 | 31.7 | 63.0 |
-| Dense | 0.836 | 0.896 | 0.639 | 0.170 | 0.453 | 76.6 | 59.8 |
-| pgvector | 0.836 | 0.896 | 0.639 | 0.170 | 0.453 | 18.1 | 34.9 |
-| Hybrid + LLM | 0.840 | 0.895 | 0.663 | 0.173 | 0.460 | 7088.9 | 8907.1 |
+| mode | nDCG@10 | MRR@10 | Recall@10 | Precision@10 | mean ms | p95 ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| BM25 | 0.234 | 0.246 | 0.172 | 0.209 | 69.5 | 115.2 |
+| Dense | 0.248 | 0.271 | 0.163 | 0.030 | 54.8 | 91.5 |
+| pgvector | 0.248 | 0.271 | 0.163 | 0.030 | 37.9 | 49.4 |
+| Hybrid + DeepSeek | 0.345 | 0.376 | 0.226 | 0.040 | 7210.1 | 9511.4 |
 
 ### Linked Validation
 
-This is a sanity check on 150 linked examples where positives are known from
-source identifiers. Hybrid includes LLM reranking (DeepSeek).
+Sanity check on 150 linked examples where positives are known from source
+identifiers.
 
 | mode | hit@10 | nDCG@10 | MRR@10 | Recall@10 | mean ms | p95 ms |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| BM25 | 0.560 | 0.515 | 0.500 | 0.560 | 836.9 | 2422.4 |
-| Dense | 1.000 | 0.961 | 0.947 | 1.000 | 151.8 | 168.4 |
-| pgvector | 1.000 | 0.961 | 0.947 | 1.000 | 33.3 | 46.8 |
-| Hybrid + LLM | 1.000 | 0.985 | 0.980 | 1.000 | 7937.4 | 10903.2 |
+| BM25 | 0.560 | 0.515 | 0.500 | 0.560 | 399.0 | 1248.0 |
+| Dense | 0.367 | 0.344 | 0.337 | 0.367 | 40.0 | 116.1 |
+| pgvector | 0.367 | 0.344 | 0.337 | 0.367 | 16.6 | 28.9 |
+| Hybrid + DeepSeek | 0.760 | 0.724 | 0.712 | 0.760 | 8258.4 | 11053.2 |
 
 ### Vector Analysis
 
@@ -112,18 +138,15 @@ Measured on the blind validation set:
 
 | metric | value |
 | --- | ---: |
-| separation rate | 0.940 |
-| mean positive cosine | 0.879 |
-| mean hardest-negative cosine | 0.833 |
-| mean margin | 0.045 |
-
-`evaluation.embedding_analysis` also writes PCA and t-SNE 2D coordinates plus
-per-dimension variance/effective-rank statistics to
-`evaluation/embedding_analysis.json`.
+| separation rate | 0.900 |
+| mean positive cosine | 0.439 |
+| mean nearest negative cosine | 0.180 |
+| mean margin | 0.258 |
+| effective rank | 174.0 |
 
 ### System Benchmark
 
-Read-only PostgreSQL/pgvector benchmark using already saved embeddings.
+Read-only PostgreSQL/pgvector benchmark over stored `raw_news` embeddings.
 
 | item | value |
 | --- | --- |
@@ -132,10 +155,11 @@ Read-only PostgreSQL/pgvector benchmark using already saved embeddings.
 | CPU | AMD Ryzen 5 5600H with Radeon Graphics, 12 logical / 6 physical cores |
 | RAM | 15.36 GiB |
 | GPU | No GPU |
-| embedded documents | 211 / 211 |
-| embedding model | `intfloat/e5-small-v2`, 384 dimensions |
-| vector index | HNSW, `ix_structured_events_embedding` |
-| index size | 432 KiB |
+| embedded documents | `518,768 / 518,768` |
+| embedding coverage | `100.0%` |
+| embedding model | `hashing-vectorizer-384`, 384 dimensions |
+| vector index | HNSW, `ix_raw_news_embedding` |
+| index size | 994 MiB |
 | HNSW used | yes |
 | sequential scan used | no |
 
@@ -143,19 +167,19 @@ Retrieval latency for pgvector:
 
 | stage | mean ms | p95 ms |
 | --- | ---: | ---: |
-| query embedding | 26.7 | 31.9 |
-| database/index search | 2.5 | 2.8 |
-| end-to-end retrieval | 29.2 | 34.4 |
+| query embedding | 0.265 | 0.333 |
+| database/index search | 56.71 | 131.11 |
+| end-to-end retrieval | 56.98 | 131.35 |
 
-Embedding generation was benchmarked in memory on 100 existing documents, with
-no database writes:
+Read-only document embedding benchmark:
 
 | metric | value |
 | --- | ---: |
-| total time | 9.748 s |
-| throughput | 10.26 docs/s |
-| mean per document | 97.5 ms |
-| p95 per document | 150.4 ms |
+| sample size | 100 |
+| total time | 0.0112 s |
+| throughput | 8,932.32 docs/s |
+| mean per document | 0.112 ms |
+| p95 per document | 0.134 ms |
 
 ## Run Locally
 
@@ -166,12 +190,13 @@ py -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Start PostgreSQL, apply migrations, load the large dataset, and run the API:
+Start PostgreSQL, apply migrations, load data, and run the API:
 
 ```powershell
 $env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
 py -m database.migrate
 py -m data.import_datasets --profile large
+py -m data.embed_raw_news --all
 py -m uvicorn api.app:app --reload
 ```
 
@@ -181,6 +206,7 @@ Search endpoints:
 - `POST /search/dense`
 - `POST /search/pgvector`
 - `POST /search/hybrid`
+- `POST /answer`
 - `GET /metrics`
 
 ## Docker
@@ -191,7 +217,17 @@ Start the database and API:
 docker compose up --build postgres api
 ```
 
-Run the database check and embedding jobs through Docker profiles:
+DeepSeek is the default answer generator when `DEEPSEEK_API_KEY` is set. For
+local answer generation, set `RAG_GENERATOR_PROVIDER=ollama`, start Ollama, and
+pull the lightweight model:
+
+```powershell
+docker compose --profile llm up -d ollama
+docker exec incident-news-ollama ollama pull qwen2.5:3b
+docker compose up --build postgres api
+```
+
+Run tool profiles:
 
 ```powershell
 docker compose --profile tools run --rm check
@@ -203,41 +239,25 @@ docker compose --profile tools run --rm benchmark_real
 docker compose --profile tools run --rm compare_iterations
 ```
 
-The API is available on `http://127.0.0.1:8000`.
+## Configuration
 
-## Embeddings
-
-Embeddings are stored in PostgreSQL in `structured_events.embedding` and
-`structured_events.embedding_model`. The search path uses saved embeddings.
-
-To generate embeddings for all current structured events:
-
-```powershell
-$env:DATABASE_URL='postgresql+asyncpg://postgres:postgres@127.0.0.1:55432/incident_news_search'
-py -m data.embed_structured_events --limit 1000000
-```
-
-To recompute existing embeddings after changing the model, quantization mode, or
-fusion experiment:
-
-```powershell
-py -m data.embed_structured_events --refresh --all
-```
-
-Useful embedding and retrieval switches:
+Useful switches:
 
 ```powershell
 $env:EMBEDDING_MODEL='intfloat/e5-small-v2'
+$env:EMBEDDING_BACKEND='auto'
 $env:EMBEDDING_QUANTIZATION='dynamic'
 $env:RETRIEVAL_FUSION_MODE='normalized_sum'
+$env:DEEPSEEK_RERANK_ENABLED='true'
+$env:DEEPSEEK_RERANK_TOP_N='12'
+$env:RAG_GENERATOR_PROVIDER='deepseek'
+$env:RAG_MIN_TOP_SCORE='0.35'
+$env:RAG_MIN_EVIDENCE_OVERLAP='0.12'
 ```
 
-The current database schema stores 384-dimensional vectors. Use a replacement
-model with the same output dimension, or rebuild the database schema and index
-for a different dimension.
-
-If more raw news is imported, first extract more `structured_events`, then rerun
-the embedding command.
+The database schema stores 384-dimensional vectors. Use a replacement embedding
+model with the same output dimension, or rebuild the schema and index for a
+different dimension.
 
 ## Checks
 
@@ -251,4 +271,4 @@ py -m evaluation.benchmark_real --benchmark-document-embeddings --embedding-samp
 py -m evaluation.compare_iterations --top-k 10 --embedding-sample-size 100
 ```
 
-Saved reports are written under `evaluation/` and are exposed by `GET /metrics`.
+Saved reports are written under `evaluation/` and exposed by `GET /metrics`.

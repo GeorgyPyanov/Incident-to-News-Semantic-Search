@@ -11,7 +11,7 @@ from event_extraction.formatting import build_incident_embedding_text
 from event_extraction.schemas import IncidentData
 from event_extraction.service import IncidentExtractionService
 from retrieval.db_search import DbNewsHit
-from retrieval.llm_reranker import DeepSeekReranker
+from retrieval.llm_reranker import Reranker, build_reranker
 from retrieval.query_rewrite import rewrite_incident_query
 
 
@@ -71,12 +71,12 @@ class MultiStageNewsSearch:
         self,
         backend: NewsSearchBackend,
         extractor: IncidentExtractionService | None = None,
-        reranker: DeepSeekReranker | None = None,
+        reranker: Reranker | None = None,
         fusion_mode: str | None = None,
     ) -> None:
         self._backend = backend
         self._extractor = extractor or IncidentExtractionService()
-        self._reranker = reranker or DeepSeekReranker()
+        self._reranker = reranker or build_reranker()
         self._fusion_mode = _normalize_fusion_mode(fusion_mode or os.getenv("RETRIEVAL_FUSION_MODE", "rrf"))
 
     def search(self, query: str, top_k: int = 10) -> list[DbNewsHit]:
@@ -115,6 +115,9 @@ class MultiStageNewsSearch:
             )
             for rank, candidate in enumerate(ranked[:top_k], start=1)
         ]
+
+    def close(self) -> None:
+        self._reranker.close()
 
     def _build_query_plan(self, query: str) -> QueryPlan:
         incident = self._extractor.extract(query)

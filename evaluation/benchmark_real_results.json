@@ -1,6 +1,6 @@
 {
   "benchmark_type": "real_postgresql_pgvector",
-  "timestamp": "2026-07-15T00:13:22.957399+00:00",
+  "timestamp": "2026-07-15T10:46:19.562254+00:00",
   "platform": {
     "system": "Windows",
     "release": "10",
@@ -18,7 +18,7 @@
     }
   },
   "database": {
-    "table": "structured_events",
+    "table": "raw_news",
     "read_only_default": true,
     "read_only_run": true
   },
@@ -29,22 +29,25 @@
   },
   "embedding": {
     "provider": "local",
-    "model": "intfloat/e5-small-v2",
+    "model": "hashing-vectorizer-384",
     "models_present": [
-      "intfloat/e5-small-v2"
+      "hashing-vectorizer-384"
     ],
     "vector_dimension": 384,
-    "embedded_documents": 211,
-    "total_documents": 211,
+    "embedded_documents": 518768,
+    "total_documents": 518768,
+    "unembedded_documents": 0,
+    "coverage_ratio": 1.0,
+    "coverage_percent": 100.0,
     "requested": false,
     "documents_generated": 0,
-    "batch_size": 1,
+    "batch_size": 64,
     "total_generation_time_seconds": null,
     "average_time_per_document_seconds": null,
     "throughput_documents_per_second": null
   },
   "index": {
-    "name": "ix_structured_events_embedding",
+    "name": "ix_raw_news_embedding",
     "type": "hnsw",
     "configuration": {
       "m": 16,
@@ -52,9 +55,9 @@
       "operator_class": "vector_cosine_ops",
       "partial_predicate": "embedding IS NOT NULL"
     },
-    "definition": "CREATE INDEX ix_structured_events_embedding ON public.structured_events USING hnsw (embedding vector_cosine_ops) WITH (m='16', ef_construction='64') WHERE (embedding IS NOT NULL)",
-    "size_on_disk_bytes": 442368,
-    "total_size_on_disk_bytes": 442368,
+    "definition": "CREATE INDEX ix_raw_news_embedding ON public.raw_news USING hnsw (embedding vector_cosine_ops) WITH (m='16', ef_construction='64') WHERE (embedding IS NOT NULL)",
+    "size_on_disk_bytes": 1042096128,
+    "total_size_on_disk_bytes": 1042096128,
     "rebuild_requested": false,
     "build_time_seconds": null
   },
@@ -64,26 +67,26 @@
     "measured_searches": 100,
     "clock": "time.perf_counter",
     "query_embedding_latency_ms": {
-      "mean": 26.690495999646373,
-      "median": 26.4531499997247,
-      "p95": 31.902505029574968,
-      "min": 20.25780000258237,
-      "max": 36.53489996213466
+      "mean": 0.264796999963437,
+      "median": 0.26059999981953297,
+      "p95": 0.3325550002955424,
+      "min": 0.18049999926006421,
+      "max": 0.39060000017343555
     },
     "provider_api_latency_ms": null,
     "database_index_search_latency_ms": {
-      "mean": 2.513531999429688,
-      "median": 2.449649997288361,
-      "p95": 2.8366100013954565,
-      "min": 2.0827000262215734,
-      "max": 5.623400036711246
+      "mean": 56.71207099987441,
+      "median": 44.97865000030288,
+      "p95": 131.1062800004947,
+      "min": 1.3548999995691702,
+      "max": 214.9886000006518
     },
     "end_to_end_retrieval_latency_ms": {
-      "mean": 29.206604002974927,
-      "median": 28.926450002472848,
-      "p95": 34.37003999133594,
-      "min": 22.49079995090142,
-      "max": 39.09500001464039
+      "mean": 56.97840700004235,
+      "median": 45.22570000062842,
+      "p95": 131.34932999973896,
+      "min": 1.6594000007899012,
+      "max": 215.25089999886404
     }
   },
   "explain_analyze": {
@@ -92,35 +95,32 @@
     "sequential_scan_used": false,
     "node_types": [
       "Limit",
-      "Nested Loop",
-      "Index Scan",
       "Index Scan"
     ],
     "index_names": [
-      "ix_structured_events_embedding",
-      "raw_news_pkey"
+      "ix_raw_news_embedding"
     ],
     "sequential_scan_tables": [],
-    "planning_time_ms": 0.277,
-    "execution_time_ms": 0.425
+    "planning_time_ms": 0.112,
+    "execution_time_ms": 0.556
   },
   "document_embedding_benchmark": {
     "provider": "local",
-    "model": "intfloat/e5-small-v2",
+    "model": "hashing-vectorizer-384",
     "vector_dimension": 384,
     "sample_size": 100,
     "batch_size": 1,
     "warmup_documents": 1,
     "clock": "time.perf_counter",
-    "total_generation_time_seconds": 9.748045499960426,
+    "total_generation_time_seconds": 0.011195299999599229,
     "per_document_latency_ms": {
-      "mean": 97.47845500067342,
-      "median": 96.53545002220199,
-      "p95": 150.35124500573147,
-      "min": 34.23290001228452,
-      "max": 174.1158000077121
+      "mean": 0.11163700006363797,
+      "median": 0.10765000024548499,
+      "p95": 0.13387000108195932,
+      "min": 0.09809999937715475,
+      "max": 0.21689999994123355
     },
-    "throughput_documents_per_second": 10.258466684465718,
+    "throughput_documents_per_second": 8932.319813098338,
     "gpu_used": false,
     "hardware": {
       "cpu": {
@@ -138,7 +138,7 @@
     "embeddings_persisted": false,
     "index_modified": false,
     "source_functions": [
-      "data.embed_structured_events._event_text",
+      "data.embed_raw_news.raw_news_document_text",
       "retrieval.embeddings.build_document_text",
       "retrieval.embeddings.build_embedding_client"
     ]

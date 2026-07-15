@@ -4,7 +4,7 @@ from retrieval.embeddings import (
     SentenceTransformerEmbeddingClient,
     build_embedding_client,
 )
-from retrieval.llm_reranker import DeepSeekReranker
+from retrieval.llm_reranker import DeepSeekReranker, NullReranker, build_reranker
 from retrieval.multistage import MultiStageNewsSearch
 
 __all__ = [
@@ -13,7 +13,9 @@ __all__ = [
     "DeepSeekReranker",
     "HashingEmbeddingClient",
     "MultiStageNewsSearch",
+    "NullReranker",
     "SearchMode",
     "SentenceTransformerEmbeddingClient",
     "build_embedding_client",
+    "build_reranker",
 ]

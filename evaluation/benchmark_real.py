@@ -1,7 +1,7 @@
 """Benchmark the real PostgreSQL/pgvector retrieval path.
 
-The default command is read-only: it uses existing structured-event embeddings
-and the existing HNSW index. Expensive mutations require explicit CLI flags.
+The default command is read-only: it uses existing raw-news embeddings and the
+existing HNSW index. Expensive mutations require explicit CLI flags.
 """
 
 from __future__ import annotations
@@ -28,9 +28,10 @@ DEFAULT_WARMUPS = 1
 DEFAULT_TOP_K = 10
 DEFAULT_EMBEDDING_LIMIT = 1000
 DEFAULT_EMBEDDING_SAMPLE_SIZE = 100
-EMBEDDING_BATCH_SIZE = 1
-INDEX_NAME = "ix_structured_events_embedding"
-TABLE_NAME = "structured_events"
+EMBEDDING_GENERATION_BATCH_SIZE = 64
+DOCUMENT_EMBEDDING_BENCHMARK_BATCH_SIZE = 1
+INDEX_NAME = "ix_raw_news_embedding"
+TABLE_NAME = "raw_news"
 
 
 class Cursor(Protocol):
@@ -58,7 +59,7 @@ SELECT
     count(*)::bigint AS total_documents,
     min(vector_dims(embedding)) FILTER (WHERE embedding IS NOT NULL) AS vector_dimension,
     array_remove(array_agg(DISTINCT embedding_model), NULL) AS embedding_models
-FROM structured_events
+FROM raw_news
 """
 
 
@@ -74,26 +75,24 @@ FROM pg_class AS index_class
 JOIN pg_index AS index_info ON index_info.indexrelid = index_class.oid
 JOIN pg_class AS table_class ON table_class.oid = index_info.indrelid
 JOIN pg_am AS access_method ON access_method.oid = index_class.relam
-WHERE table_class.relname = 'structured_events'
-  AND index_class.relname = 'ix_structured_events_embedding'
+WHERE table_class.relname = 'raw_news'
+  AND index_class.relname = 'ix_raw_news_embedding'
 """
 
 
 DOCUMENT_SAMPLE_SQL = """
 /* benchmark_document_sample: read-only input for the production embedder */
 SELECT
-    se.id,
-    se.event_type,
-    se.provider,
-    se.title,
-    se.summary,
+    rn.id,
     rn.source,
     rn.source_type,
+    rn.title,
+    rn.body,
+    rn.raw_region_hint,
     rn.raw_payload
-FROM structured_events AS se
-LEFT JOIN raw_news AS rn ON rn.id = se.raw_news_id
-WHERE se.embedding IS NOT NULL
-ORDER BY md5(se.id::text)
+FROM raw_news AS rn
+WHERE rn.embedding IS NOT NULL
+ORDER BY md5(rn.id::text)
 LIMIT %(limit)s
 """
 
@@ -150,7 +149,7 @@ def run_real_benchmark(
     generation = {
         "requested": generate_embeddings,
         "documents_generated": 0,
-        "batch_size": EMBEDDING_BATCH_SIZE,
+        "batch_size": EMBEDDING_GENERATION_BATCH_SIZE,
         "total_generation_time_seconds": None,
         "average_time_per_document_seconds": None,
         "throughput_documents_per_second": None,
@@ -248,6 +247,10 @@ def run_real_benchmark(
             "vector_dimension": dimension,
             "embedded_documents": int(embedding_metadata["embedded_documents"]),
             "total_documents": int(embedding_metadata["total_documents"]),
+            **embedding_coverage_metrics(
+                int(embedding_metadata["embedded_documents"]),
+                int(embedding_metadata["total_documents"]),
+            ),
             **generation,
         },
         "index": {
@@ -294,7 +297,7 @@ def get_embedding_metadata(cursor: Cursor) -> dict[str, Any]:
     row = cursor.fetchone()
     if not row or int(_row_value(row, "embedded_documents", 0) or 0) == 0:
         raise RuntimeError(
-            "No existing structured-event embeddings were found. "
+            "No existing raw-news embeddings were found. "
             "Run with --generate-embeddings only if database modification is intended."
         )
     return {
@@ -327,15 +330,15 @@ def default_document_sample_loader(cursor: Cursor, sample_size: int) -> list[dic
     cursor.execute(DOCUMENT_SAMPLE_SQL, {"limit": sample_size})
     rows = cursor.fetchall()
     if not rows:
-        raise RuntimeError("No existing embedded structured events were available for sampling")
+        raise RuntimeError("No existing embedded raw-news documents were available for sampling")
     return [dict(row) for row in rows]
 
 
 def default_document_embedder(row: dict[str, Any], dimension: int) -> list[float]:
     # These are deliberately the exact production text preparation and
-    # embedding functions used by data.embed_structured_events.
+    # embedding functions used by data.embed_raw_news.
     try:
-        from data.embed_structured_events import _event_text
+        from data.embed_raw_news import raw_news_document_text
         from retrieval.embeddings import build_document_text, validate_embedding_dimension
     except ImportError as error:
         raise RuntimeError("Document embedding benchmarking requires requirements.txt") from error
@@ -345,7 +348,7 @@ def default_document_embedder(row: dict[str, Any], dimension: int) -> list[float
         model=os.environ.get("EMBEDDING_MODEL", "intfloat/e5-small-v2"),
         quantization=os.environ.get("EMBEDDING_QUANTIZATION", "none"),
     )
-    vector = client.embed_text(build_document_text(_event_text(row)))
+    vector = client.embed_text(build_document_text(raw_news_document_text(row)))
     validate_embedding_dimension(vector, dimension, client.model_name)
     return vector
 
@@ -381,7 +384,7 @@ def benchmark_document_sample(
         "model": _benchmark_embedding_client(dimension).model_name,
         "vector_dimension": dimension,
         "sample_size": len(sample),
-        "batch_size": EMBEDDING_BATCH_SIZE,
+        "batch_size": DOCUMENT_EMBEDDING_BENCHMARK_BATCH_SIZE,
         "warmup_documents": 1,
         "clock": "time.perf_counter",
         "total_generation_time_seconds": total_seconds,
@@ -397,7 +400,7 @@ def benchmark_document_sample(
         "embeddings_persisted": False,
         "index_modified": False,
         "source_functions": [
-            "data.embed_structured_events._event_text",
+            "data.embed_raw_news.raw_news_document_text",
             "retrieval.embeddings.build_document_text",
             "retrieval.embeddings.build_embedding_client",
         ],
@@ -466,6 +469,16 @@ def latency_statistics(values: Sequence[float]) -> dict[str, float]:
     }
 
 
+def embedding_coverage_metrics(embedded_documents: int, total_documents: int) -> dict[str, float | int]:
+    unembedded_documents = max(0, total_documents - embedded_documents)
+    coverage_ratio = embedded_documents / total_documents if total_documents else 0.0
+    return {
+        "unembedded_documents": unembedded_documents,
+        "coverage_ratio": coverage_ratio,
+        "coverage_percent": coverage_ratio * 100.0,
+    }
+
+
 def save_results(results: dict[str, Any], output_path: str | Path = DEFAULT_OUTPUT) -> Path:
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -513,11 +526,11 @@ def default_query_embedder(query: str, dimension: int) -> str:
 
 def default_embedding_generator(limit: int) -> int:
     try:
-        from data.embed_structured_events import embed_structured_events
+        from data.embed_raw_news import embed_raw_news
     except ImportError as error:
         raise RuntimeError("Embedding generation requires the dependencies in requirements.txt") from error
 
-    return embed_structured_events(limit)
+    return embed_raw_news(limit, batch_size=EMBEDDING_GENERATION_BATCH_SIZE)
 
 
 @lru_cache(maxsize=None)
@@ -567,7 +580,9 @@ def format_summary(results: dict[str, Any], output_path: str | Path) -> str:
             f"  CPU: {cpu['model']} ({cpu['logical_cores']} logical, {cpu['physical_cores']} physical cores)",
             f"  RAM: {_format_bytes(hardware['total_ram_bytes'])}",
             f"  GPU: {gpu['model']}" + (f" ({_format_bytes(gpu['vram_bytes'])} VRAM)" if gpu['vram_bytes'] else ""),
-            f"  Documents: {embedding['embedded_documents']} embedded / {embedding['total_documents']} total",
+            f"  raw_news documents: {embedding['embedded_documents']} embedded / {embedding['total_documents']} total",
+            f"  raw_news embedding coverage: {embedding.get('coverage_percent', 0.0):.2f}% "
+            f"({embedding.get('unembedded_documents', 0)} unembedded)",
             f"  Embedding: {embedding['provider']} {embedding['model']}, {embedding['vector_dimension']} dimensions",
             f"  Database embedding generation: {generation_text}",
             f"  Index: {index['type']} {index['name']}, {_format_bytes(index['size_on_disk_bytes'])}",
@@ -665,7 +680,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--generate-embeddings",
         action="store_true",
-        help="Generate embeddings only for currently unembedded structured events (modifies the database).",
+        help="Generate embeddings only for currently unembedded raw-news documents (modifies the database).",
     )
     parser.add_argument("--embedding-limit", type=int, default=DEFAULT_EMBEDDING_LIMIT)
     parser.add_argument(

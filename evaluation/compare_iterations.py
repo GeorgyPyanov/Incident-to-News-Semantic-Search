@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
-from data.embed_structured_events import embed_structured_events
+from data.embed_raw_news import embed_raw_news
 from database.settings import settings
 from evaluation.benchmark_real import (
     DEFAULT_SEARCHES,
@@ -133,7 +133,7 @@ def run_iteration(
         }
         if config.refresh_embeddings:
             started = time.perf_counter()
-            refreshed = embed_structured_events(limit=None, refresh=True)
+            refreshed = embed_raw_news(limit=None, refresh=True)
             elapsed = time.perf_counter() - started
             refresh_result = {
                 "requested": True,

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import psycopg
@@ -6,7 +7,9 @@ from database.settings import settings
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 MIGRATION_ALIASES = {
-    "007_structured_events_embedding.sql": {"007_structured_events_embedding_dim_384.sql"},
+    "007_structured_events_embedding.sql": (
+        re.compile(r"^007_structured_events_embedding_dim_\d+\.sql$"),
+    ),
 }
 
 
@@ -33,8 +36,10 @@ def apply_migrations() -> None:
             applied = {row[0] for row in cur.fetchall()}
 
             for migration_path in sorted(MIGRATIONS_DIR.glob("*.sql")):
-                legacy_names = MIGRATION_ALIASES.get(migration_path.name, set())
-                if migration_path.name in applied or legacy_names & applied:
+                legacy_patterns = MIGRATION_ALIASES.get(migration_path.name, ())
+                if migration_path.name in applied or any(
+                    pattern.match(name) for pattern in legacy_patterns for name in applied
+                ):
                     continue
 
                 sql = migration_path.read_text(encoding="utf-8")
